@@ -1,0 +1,230 @@
+
+
+class State:
+    """
+    Enumeration of possible states for the calibration bench.
+    """
+    IDLE = "IDLE"
+    PRECHECK = "PRECHECK"
+    RUNNING = "RUNNING"
+    COMPLETED = "COMPLETED"
+    ERROR = "ERROR"
+
+
+class StateMachine:
+    """
+    State machine implementation for the Inductive Coil Calibration Bench.
+    
+    This class manages state transitions and associated actions for the
+    calibration bench system.
+    """
+    
+    def __init__(self):
+        """
+        Initialize the state machine in IDLE state.
+        """
+        self.current_state = None
+        self.previous_state = None
+        self.error_message = None
+        
+        # Define valid state transitions
+        self.valid_transitions = {
+            State.IDLE: [State.PRECHECK, State.ERROR],
+            State.PRECHECK: [State.RUNNING, State.IDLE, State.ERROR],
+            State.RUNNING: [State.COMPLETED, State.ERROR, State.IDLE],
+            State.COMPLETED: [State.IDLE, State.ERROR],
+            State.ERROR: [State.IDLE]
+        }
+        
+        # Initialize state entry and exit actions
+        self._setup_state_actions()
+    
+    def _setup_state_actions(self):
+        """
+        Set up actions to be performed on state entry and exit.
+        """
+        # State entry actions
+        self.state_entry_actions = {
+            State.IDLE: self._on_enter_idle,
+            State.PRECHECK: self._on_enter_precheck,
+            State.RUNNING: self._on_enter_running,
+            State.COMPLETED: self._on_enter_completed,
+            State.ERROR: self._on_enter_error
+        }
+        
+        # State exit actions
+        self.state_exit_actions = {
+            State.IDLE: self._on_exit_idle,
+            State.PRECHECK: self._on_exit_precheck,
+            State.RUNNING: self._on_exit_running,
+            State.COMPLETED: self._on_exit_completed,
+            State.ERROR: self._on_exit_error
+        }
+    
+    def transition_to(self, new_state, error_message=None):
+        """
+        Transition to a new state if the transition is valid.
+        
+        Args:
+            new_state (str): The state to transition to
+            error_message (str, optional): Error message if transitioning to ERROR state
+            
+        Returns:
+            bool: True if transition was successful, False otherwise
+        """
+        # Check if transition is valid
+        if new_state not in self.valid_transitions[self.current_state]:
+            print(f"Invalid state transition: {self.current_state} -> {new_state}")
+            return False
+        
+        # Execute exit action for current state
+        self.state_exit_actions[self.current_state]()
+        
+        # Update state
+        self.previous_state = self.current_state
+        self.current_state = new_state
+        
+        # Set error message if transitioning to ERROR state
+        if new_state == State.ERROR:
+            self.error_message = error_message or "Unknown error"
+        
+        # Execute entry action for new state
+        self.state_entry_actions[self.current_state]()
+        
+        print(f"State transition: {self.previous_state} -> {self.current_state}")
+        return True
+    
+    def get_current_state(self):
+        """
+        Get the current state.
+        
+        Returns:
+            str: Current state
+        """
+        return self.current_state
+    
+    def get_error_message(self):
+        """
+        Get the current error message.
+        
+        Returns:
+            str: Current error message or None if not in ERROR state
+        """
+        if self.current_state == State.ERROR:
+            return self.error_message
+        return None
+    
+    # State entry actions
+    def _on_enter_idle(self):
+        #Actions to perform when entering IDLE state.
+        print("Entering IDLE state: System in standby mode")
+        # Turn on all tower lights
+        # Reset error message
+        self.error_message = None
+        while True:
+            print("Waiting for input...")
+            banana = int(input("Enter a number: "))
+            if banana == 1:
+
+                transition_to(State.PRECHECK_DINAMIC)
+            
+            elif banana == -1:
+            
+                transition_to(State.PRECHECK_STATIC)
+    
+    def _on_enter_precheck(self):
+        """Actions to perform when entering PRECHECK state."""
+        print("Entering PRECHECK state: Verifying test conditions")
+        # Start blinking GREEN tower light
+        # Begin temperature control
+        #After precheck is done, transition to RUNNING state
+        transition_to(State.RUNNING)
+    
+    def _on_enter_running(self):
+        """Actions to perform when entering RUNNING state."""
+        print("Entering RUNNING state: Test in progress")
+        # Set GREEN tower light
+        # Start data reading
+        # After test is done, transition to COMPLETED state
+        transition_to(State.COMPLETED)
+        # After test is done, transition to COMPLETED state
+    
+    def _on_enter_completed(self):
+        """Actions to perform when entering COMPLETED state."""
+        print("Entering COMPLETED state: Test finished successfully")
+        # Set BLUE/WHITE tower light
+        # Finalize data reading
+        # Save data to file
+        # After saving data, transition to IDLE state
+        transition_to(State.IDLE)
+        # After saving data, transition to IDLE state
+    
+    def _on_enter_error(self):
+        """Actions to perform when entering ERROR state."""
+        print(f"Entering ERROR state: {self.error_message}")
+        # Set RED tower light
+        # Log error
+    
+    # State exit actions
+    def _on_exit_idle(self):
+        """Actions to perform when exiting IDLE state."""
+        print("Exiting IDLE state")
+        # Turn off all tower lights
+    
+    def _on_exit_precheck(self):
+        """Actions to perform when exiting PRECHECK state."""
+        print("Exiting PRECHECK state")
+        # Stop blinking GREEN tower light
+    
+    def _on_exit_running(self):
+        """Actions to perform when exiting RUNNING state."""
+        print("Exiting RUNNING state")
+        # Turn off GREEN tower light
+    
+    def _on_exit_completed(self):
+        """Actions to perform when exiting COMPLETED state."""
+        print("Exiting COMPLETED state")
+        # Turn off BLUE/WHITE tower light
+    
+    def _on_exit_error(self):
+        """Actions to perform when exiting ERROR state."""
+        print("Exiting ERROR state")
+        # Turn off RED tower light
+
+# Example usage
+
+"""
+Notes:
+
+This manus code is pretty usefull as it lets us just create quite simple state machine.
+Its just that the dofferent states transitions will have to be coded inside the on_enter_<state> functions.
+The state machine is initialized in the IDLE state. The transition_to method is used to change states.
+Except for the IDLE state, all other states have entry and exit actions defined. Meaning only in IDLE should input from the user be accepted.
+The state machine is designed to handle transitions between states and perform actions based on the current state. 
+
+As such the idle state should operate from a while loop that checks for input from the user.
+Such as:
+
+    def _on_enter_idle(self):
+       Actions to perform when entering IDLE state.
+        print("Entering IDLE state: System in standby mode")
+        # Turn on all tower lights
+        # Reset error message
+        self.error_message = None
+        while True:
+            print("Waiting for input...")
+            user_input = input("Please enter a value: ")
+                If user_input == 1:
+                    transition_to(State.PRECHECK_DINAMIC)
+                elif user_input == -1:
+                    transition_to(State.PRECHECK_STATIC)
+         TempControl()
+        # This would be the loop for idle were it checks for input from the user and then runs temp control
+"""
+
+
+KVEBench = StateMachine()
+KVEBench.transition_to(State.PRECHECK)
+KVEBench.transition_to(State.RUNNING)
+KVEBench.transition_to(State.COMPLETED)
+KVEBench.transition_to(State.IDLE)

@@ -1,1 +1,23 @@
 
+# this is just a test and try out
+ # tHIS SHOULD WORK AS THE LIBRARYS FOR THE SENSOR SETUP. 
+ # AT LEAST FOR READING, fOR LOGGING WE WILL CHECK LATER
+ # 
+import time
+import board
+import busio
+import adafruit_mcp9600
+
+
+# Create the I2C bus
+i2c = busio.I2C(board.SCL, board.SDA)
+# Create the MCP9600 object
+mcp = adafruit_mcp9600.MCP9600(i2c, address=AMP1.I2C_ADDRESS)
+# Set the thermocouple type
+mcp.thermocouple_type = adafruit_mcp9600.ThermocoupleType.K
+# Set the reference junction temperature
+mcp.reference_junction_temperature = 25.0
+# Set the temperature unit
+mcp.temperature_unit = adafruit_mcp9600.TemperatureUnit.CELSIUS
+# Set the filter coefficient
+mcp.filter_coefficient = 0.5
