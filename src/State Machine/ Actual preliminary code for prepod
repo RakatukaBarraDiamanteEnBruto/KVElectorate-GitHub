@@ -39,19 +39,24 @@ GPIO.setup(INPUT_PIN_2, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
 
 #Pins for leds
 
-LED1 = LED(24)
-LED2 = LED(25)
+LED1 = LED(24) # IDLE Led
+LED2 = LED(25) # PRECHECK Led
+LED3 = LED(8)  # RUNNING Led
+LED4 = LED(7)  # COMPLETED Led
+LED5 = LED(12) # ERROR Led
 
 #PINS for switch
-
 button = Button(23)
+
+
 
 class State:
     """
     Enumeration of possible states for the calibration bench.
     """
     IDLE = "IDLE"
-    PRECHECK = "PRECHECK"
+    PRECHECK_DINAMIC = "PRECHECK"
+    PRECHECK_STATIC = "PRECHECK_STATIC"
     RUNNING = "RUNNING"
     COMPLETED = "COMPLETED"
     ERROR = "ERROR"
@@ -75,8 +80,9 @@ class StateMachine:
         
         # Define valid state transitions
         self.valid_transitions = {
-            State.IDLE: [State.PRECHECK, State.ERROR],
-            State.PRECHECK: [State.RUNNING, State.IDLE, State.ERROR],
+            State.IDLE: [State.PRECHECK_DINAMIC,State.PRECHECK_STATIC, State.ERROR],
+            State.PRECHECK_STATIC: [State.RUNNING, State.IDLE, State.ERROR],
+            State.PRECHECK_DINAMIC: [State.RUNNING, State.IDLE, State.ERROR],
             State.RUNNING: [State.COMPLETED, State.ERROR, State.IDLE],
             State.COMPLETED: [State.IDLE, State.ERROR],
             State.ERROR: [State.IDLE]
@@ -92,7 +98,8 @@ class StateMachine:
         # State entry actions
         self.state_entry_actions = {
             State.IDLE: self._on_enter_idle,
-            State.PRECHECK: self._on_enter_precheck,
+            State.PRECHECK_DINAMIC: self._on_enter_precheck_dinamic,
+            State.PRECHECK_STATIC: self._on_enter_precheck_static,
             State.RUNNING: self._on_enter_running,
             State.COMPLETED: self._on_enter_completed,
             State.ERROR: self._on_enter_error
@@ -101,7 +108,8 @@ class StateMachine:
         # State exit actions
         self.state_exit_actions = {
             State.IDLE: self._on_exit_idle,
-            State.PRECHECK: self._on_exit_precheck,
+            State.PRECHECK_DINAMIC: self._on_exit_precheck_dinamic,
+            State.PRECHECK_STATIC: self._on_exit_precheck_static,
             State.RUNNING: self._on_exit_running,
             State.COMPLETED: self._on_exit_completed,
             State.ERROR: self._on_exit_error
@@ -160,6 +168,10 @@ class StateMachine:
             return self.error_message
         return None
     
+    """The following methods are the state entry and exit actions for each state.
+    These methods are the ones we are gonna use to control the LEDs.
+    This will save us from having to write the same code over and over again."""
+    
     # State entry actions
     def _on_enter_idle(self):
         #Actions to perform when entering IDLE state.
@@ -168,12 +180,19 @@ class StateMachine:
         # Reset error message
         self.error_message = None
 
-    def _on_enter_precheck(self):
+    def _on_enter_precheck_dinamic(self):
         """Actions to perform when entering PRECHECK state."""
         print("Entering PRECHECK state: Verifying test conditions")
         # Start blinking GREEN tower light
         # Begin temperature control
         #After precheck is done, transition to RUNNING state
+
+    def _on_enter_precheck_static(self):
+        """Actions to perform when entering PRECHECK state."""
+        print("Entering PRECHECK state: Verifying test conditions")
+        # Start blinking GREEN tower light
+        # Begin temperature control
+        #After precheck is done, transition to RUNNING state            
         
     
     def _on_enter_running(self):
@@ -207,11 +226,15 @@ class StateMachine:
         print("Exiting IDLE state")
         # Turn off all tower lights
     
-    def _on_exit_precheck(self):
+    def _on_exit_precheck_dinamic(self):
         """Actions to perform when exiting PRECHECK state."""
         print("Exiting PRECHECK state")
         # Stop blinking GREEN tower light
-    
+
+    def _on_exit_precheck_static(self):
+        """Actions to perform when exiting PRECHECK state."""
+        print("Exiting PRECHECK state")
+        # Stop blinking GREEN tower light    
     def _on_exit_running(self):
         """Actions to perform when exiting RUNNING state."""
         print("Exiting RUNNING state")
