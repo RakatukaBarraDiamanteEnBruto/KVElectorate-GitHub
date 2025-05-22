@@ -233,18 +233,18 @@ class StateMachine:
             # Process current state
             if self.current_state == State.IDLE:
                 # Wait for button press
-                time.sleep(0.5)
-                if button.is_pressed:
-                    # Wait for button press
-                    print("you pressed me nya")
-                    print("transitioning, NANI, to PRECHECK")
-                    self.transition_to(State.PRECHECK)
+                while self.current_state == State.IDLE:
+                    if button.is_pressed:
+                        # Wait for button press
+                        print("you pressed me nya")
+                        print("transitioning, NANI, to PRECHECK")
+                        self.transition_to(State.PRECHECK)
                 
             elif self.current_state == State.PRECHECK:
                 # Check if all thermocouples are connected
                 print("Entering PRECHECK state: Verifying test conditions")
                 cy=0
-                while True:
+                while self.current_state == State.PRECHECK :
                     LED1.on()
                     cy += 1
                     time.sleep(2)
@@ -252,16 +252,18 @@ class StateMachine:
                         print("All thermocouples connected, transitioning to RUNNING")
                         LED1.off()
                         self.transition_to(State.RUNNING)
+                        break
                     else:
                         print("Waiting for all thermocouples to be connected")
                 
                 # Small delay
                 time.sleep(0.5)
-            elif self.current_state == State.COMPLETED:
+            elif self.current_state == State.RUNNING:
                 LED2.on()
                 cy1=0
-                while True:
+                while self.current_state == State.RUNNING:
                     cy1 += 1
+                    print("Test in progress")
                     time.sleep(2)
                     if cy1 == 3:
                         print("Test completed, transitioning to IDLE")
