@@ -1,3 +1,7 @@
+""" The following try statements are used to import the necessary libraries for GPIO control and LED/button management.
+If the libraries are not found, mock objects are used to simulate their behavior for testing purposes.
+This allows the code to run without actual hardware, making it easier to test the state machine logic."""
+
 try:
     import RPi.GPIO as GPIO
 except ModuleNotFoundError:
@@ -35,8 +39,8 @@ GPIO.setup(INPUT_PIN_2, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
 
 #Pins for leds
 
-LED1 = LED(24)
-LED2 = LED(25)
+LED1 = LED(5)
+LED2 = LED(6)
 
 #PINS for switch
 
@@ -65,7 +69,7 @@ class StateMachine:
         """
         Initialize the state machine in IDLE state.
         """
-        self.current_state = None
+        self.current_state = State.IDLE
         self.previous_state = None
         self.error_message = None
         
@@ -229,21 +233,21 @@ class StateMachine:
             # Process current state
             if self.current_state == State.IDLE:
                 # Wait for button press
-                
-                while INPUT_PIN_1 and INPUT_PIN_2 == GPIO.LOW:
+                time.sleep(0.5)
+                if button.is_pressed:
                     # Wait for button press
-                    print("waiting for mode select")
-                if GPIO.input(INPUT_PIN_1) == GPIO.HIGH: 
-                    print("Switch activated, transitioning to PRECHECK")
+                    print("you pressed me nya")
+                    print("transitioning, NANI, to PRECHECK")
                     self.transition_to(State.PRECHECK)
                 
             elif self.current_state == State.PRECHECK:
                 # Check if all thermocouples are connected
+                print("Entering PRECHECK state: Verifying test conditions")
                 cy=0
-                while INPUT_PIN_1== GPIO.HIGH:
+                while True:
                     LED1.on()
                     cy += 1
-                    time.sleep(1)
+                    time.sleep(2)
                     if cy == 3:
                         print("All thermocouples connected, transitioning to RUNNING")
                         LED1.off()
@@ -256,9 +260,9 @@ class StateMachine:
             elif self.current_state == State.COMPLETED:
                 LED2.on()
                 cy1=0
-                while INPUT_PIN_1== GPIO.HIGH:
+                while True:
                     cy1 += 1
-                    time.sleep(1)
+                    time.sleep(2)
                     if cy1 == 3:
                         print("Test completed, transitioning to IDLE")
                         LED2.off()
@@ -304,7 +308,5 @@ Such as:
 
 
 KVEBench = StateMachine()
-KVEBench.transition_to(State.PRECHECK)
-KVEBench.transition_to(State.RUNNING)
-KVEBench.transition_to(State.COMPLETED)
-KVEBench.transition_to(State.IDLE)
+KVEBench.run()
+#KVE.run()
