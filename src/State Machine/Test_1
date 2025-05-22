@@ -2,28 +2,13 @@
 If the libraries are not found, mock objects are used to simulate their behavior for testing purposes.
 This allows the code to run without actual hardware, making it easier to test the state machine logic."""
 
-try:
-    import RPi.GPIO as GPIO
-except ModuleNotFoundError:
-    from unittest import mock
-    GPIO = mock.MagicMock()
+
+import RPi.GPIO as GPIO
 import time
-try:
-    import gpiozero
-except ModuleNotFoundError:
-    from unittest import mock
-    gpiozero = mock.MagicMock()
+import gpiozero
 from time import sleep
-try:
-    from gpiozero import Button
-except (ModuleNotFoundError, ImportError):
-    from unittest.mock import MagicMock
-    Button = MagicMock()
-try:
-    from gpiozero import LED
-except (ModuleNotFoundError, ImportError):
-    from unittest.mock import MagicMock
-    LED = MagicMock()
+from gpiozero import Button
+from gpiozero import LED
 
 # Set up GPIO mode
 GPIO.setmode(GPIO.BCM)
