@@ -1,0 +1,37 @@
+import threading
+import time
+try:
+    from gpiozero import LED
+except (ModuleNotFoundError, ImportError):
+    from unittest.mock import MagicMock
+    LED = MagicMock()
+
+led1 = LED(17)
+
+global stop 
+
+stop = False
+
+def LED():
+    while stop == False:
+        print("LED is on")
+        time.sleep(0.25)
+        print("LED is off")
+        time.sleep(0.25)
+
+thread1 =threading.Thread(target=LED)
+
+def main():
+    thread1.start()
+    print("Activating Thermocouple")
+    time.sleep(0.5)
+    print("Activated Thermocouple verified") 
+    time.sleep(0.5)
+    print("Activating WaterFlow Sensor")
+    time.sleep(0.5)
+    print("Activated WaterFlow Sensor verified")
+    print("Stopping LED")
+    global stop
+    stop = True
+    thread1.join()
+main()
