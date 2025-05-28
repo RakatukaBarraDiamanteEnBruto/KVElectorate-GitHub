@@ -322,7 +322,7 @@ class StateMachine:
             if self.current_state == State.IDLE:
                 # Wait for button press
 
-                modeselect = input ("Press 1 for PRECHECK DYNAMIC, 0 for PRECHECK STATIC: ") #this decides if later the dinamic or static led are turned on
+                modeselect = int(input ("Press 1 for PRECHECK DYNAMIC, 0 for PRECHECK STATIC: ")) #this decides if later the dinamic or static led are turned on
                 if modeselect == 0:
                     runmode = True
                 if modeselect == 1:
