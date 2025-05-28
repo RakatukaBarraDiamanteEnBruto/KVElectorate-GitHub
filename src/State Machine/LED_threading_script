@@ -48,17 +48,25 @@ state = State.IDLE
 def ledscpt(): 
     if state  == State.IDLE:    # IDLE State LED Script, It just makes all LED ON
             LED1.on() #PRECHECK LED
-            LED2.on()
-            LED3.on()
-            LED4.on()
-        while State.IDLE == True:
+            LED2.on() #RUNNING STATIC LED
+            LED3.on() #RUNNING DINAMIC LED
+            LED4.on()   #ERROR LED
+            while State.IDLE == True:
 
-            print("LEDs are ON in IDLE state")  
+                print("LEDs are ON in IDLE state")  
             
             
 
 
     if state  == State.PRECHECK_DINAMIC or state == State.PRECHECK_STATIC: # PRECHECK State LED Script, It just makes LED2 blink
+        
+        #Turn off all LEDs before starting the PRECHECK state
+        LED1.off() #PRECHECK LED
+        LED2.off() #RUNNING STATIC LED
+        LED3.off() #RUNNING DINAMIC LED
+        LED4.off()   #ERROR LED
+        
+        #this if statement decides if the next LED is blue or white for the static or dynamic running mode
         if state == State.PRECHECK_STATIC:
             runmode = True  # Set runmode to True for STATIC mode  
         else: 
@@ -67,23 +75,25 @@ def ledscpt():
 
         while state  == State.PRECHECK_DINAMIC or state == State.PRECHECK_STATIC: # It will blink LED2 it will also set a variable that will decide what LED 
                                                                                   # set if the next LED is blue or white for the static or dynamic running mode
-            LED1.on()
-            time.sleep(0.1)
+                        
             LED1.off()
+            time.sleep(0.1)
+            LED1.on()
+
             print("LEDs are ON in PRECHECK state")  
             
     if state  == State.RUNNING and runmode == True: # RUNNING State LED Script, It just makes LED2 Blink during static test
         while state == State.RUNNING:
 
-            LED2.on()
-            time.sleep(0.1)
             LED2.off()
+            time.sleep(0.1)
+            LED2.on()
     if state  == State.RUNNING and runmode == False: # RUNNING State LED Script, It just makes LED3 Blink during dynamic test 
         while state == State.RUNNING:
 
-            LED2.on()
+            LED2.off()
             time.sleep(0.1)
-            LED2.off()           
+            LED2.on()           
 
     if state  == State.COMPLETED: # COMPLETED State LED Script, It just makes LED1 ON
         while State.COMPLETED == True:
