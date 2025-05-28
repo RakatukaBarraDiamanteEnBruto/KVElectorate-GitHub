@@ -60,6 +60,7 @@ def ledscpt():
             while State.IDLE == True:
 
                 print("LEDs are ON in IDLE state")  
+                sleep(1)
             
             
 
@@ -78,7 +79,7 @@ def ledscpt():
                                                                                   # set if the next LED is blue or white for the static or dynamic running mode
                         
             LED1.off()
-            time.sleep(0.1)
+            time.sleep(0.5)
             LED1.on()
 
             print("LEDs are ON in PRECHECK state")  
@@ -87,14 +88,14 @@ def ledscpt():
         while KVEBench.current_state == State.RUNNING:
 
             LED2.off()
-            time.sleep(0.1)
+            time.sleep(0.5)
             LED2.on()
     if KVEBench.current_state  == State.RUNNING and runmode == False: # RUNNING State LED Script, It just makes LED3 Blink during dynamic test 
         while KVEBench.current_state == State.RUNNING:
 
-            LED2.off()
-            time.sleep(0.1)
-            LED2.on()           
+            LED3.off()
+            time.sleep(0.5)
+            LED3.on()           
 
     if KVEBench.current_state  == State.COMPLETED: # COMPLETED State LED Script, It just makes LED1 ON
         while KVEBench.current_state == State.COMPLETED:
@@ -106,11 +107,11 @@ def ledscpt():
             if KVEBench.current_state  == State.COMPLETED and runmode == False: # COMPLETED State LED Script, It just makes LED3 on after dynamic test 
                 while KVEBench.current_state == State.COMPLETED:
 
-                    LED2.on()
+                    LED3.on()
     if KVEBench.current_state == State.ERROR: # ERROR State LED Script, It just makes LED4 blink
         while KVEBench.current_state == State.ERROR:
             LED4.on()
-            time.sleep(0.1)
+            time.sleep(0.5)
             LED4.off()
             print("LEDs are ON in ERROR state")
 
