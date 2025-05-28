@@ -319,8 +319,12 @@ class StateMachine:
                 
                 for i in range(6):
                     print ("on idle")
-                    time.sleep(0.5)                
-
+                    time.sleep(0.5)           
+                if runmode == True:
+                    self.transition_to(State.PRECHECK_STATIC)         
+                elif runmode == False:
+                    self.transition_to(State.PRECHECK_DINAMIC)
+   
             elif self.current_state == State.PRECHECK_DINAMIC:
                 for i in range(6):
                     print ("on PRECHECK D")
