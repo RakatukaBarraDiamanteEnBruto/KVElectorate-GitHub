@@ -38,7 +38,7 @@ LED4 = LED(17)  # ERRROR Led
 #PINS for switch
 button = Button(23)
 
-
+runmode = True # This variable will be used to decide which LED to turn on during the RUNNING state, if it is True it will turn on LED2, if it is False it will turn on LED3
 
 class State:
     """
@@ -72,11 +72,6 @@ def ledscpt():
         LED3.off() #RUNNING DINAMIC LED
         LED4.off()   #ERROR LED
         
-        #this if statement decides if the next LED is blue or white for the static or dynamic running mode
-        if KVEBench.current_state == State.PRECHECK_STATIC:
-            runmode = True  # Set runmode to True for STATIC mode  
-        else: 
-            runmode = False     
 
 
         while KVEBench.current_state  == State.PRECHECK_DINAMIC or KVEBench.current_state == State.PRECHECK_STATIC: # It will blink LED2 it will also set a variable that will decide what LED 
