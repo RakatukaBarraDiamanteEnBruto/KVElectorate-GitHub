@@ -328,7 +328,7 @@ class StateMachine:
                 if modeselect == 1:
                     runmode = False  
                 print(runmode)
-                """for i in range(6):
+                for i in range(6):
                     print ("on idle")
                     time.sleep(0.5)           
                 if runmode == True:
@@ -362,9 +362,7 @@ class StateMachine:
 
             elif self.current_state == State.ERROR:
                 # Wait for button press to return to idle
-                time.sleep(0.1)"""
-# Example usage
-
+                time.sleep(0.1)
 """
 Notes:
 
