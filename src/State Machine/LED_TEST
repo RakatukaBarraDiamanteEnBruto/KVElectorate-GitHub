@@ -41,8 +41,8 @@ GPIO.setup(INPUT_PIN_2, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
 
 LED1 = LED(24) # PRECHECK Led
 LED2 = LED(25) # RUNNING STATIC Led
-LED3 = LED(8)  # RUNNING DINAMIC Led
-LED4 = LED(7)  # ERRROR Led
+LED3 = LED(26)  # RUNNING DINAMIC Led
+LED4 = LED(17)  # ERRROR Led
 
 #PINS for switch
 button = Button(23)
