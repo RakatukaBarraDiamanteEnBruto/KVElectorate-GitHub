@@ -26,7 +26,7 @@ except (ModuleNotFoundError, ImportError):
     LED = MagicMock()
 import threading
 # Set up GPIO mode
-runmode = True
+runmode = True #This variable should be declared in the run function but should be able to be checked in ledscpt function
 
 #Pins for leds
 
@@ -52,6 +52,7 @@ class State:
     ERROR = "ERROR"
 
 def ledscpt(): 
+    global runmode
     while True:
         if KVEBench.current_state  == State.IDLE:    # IDLE State LED Script, It just makes all LED ON
                 LED1.on() #PRECHECK LED
