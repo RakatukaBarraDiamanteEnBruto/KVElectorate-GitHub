@@ -30,7 +30,7 @@ GPIO.setmode(GPIO.BCM)
 
 # Pins for switch
 
-INPUT_PIN_1 = 17  # Change to your first GPIO pin
+INPUT_PIN_1 = 1  # Change to your first GPIO pin
 INPUT_PIN_2 = 18  # Change to your second GPIO pin
 
 # Set up the pins as inputs with pull-down resistors
