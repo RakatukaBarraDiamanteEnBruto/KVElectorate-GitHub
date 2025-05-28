@@ -38,7 +38,7 @@ LED4 = LED(17)  # ERRROR Led
 #PINS for switch
 button = Button(23)
 
-runmode = True # This variable will be used to decide which LED to turn on during the RUNNING state, if it is True it will turn on LED2, if it is False it will turn on LED3
+ # This variable will be used to decide which LED to turn on during the RUNNING state, if it is True it will turn on LED2, if it is False it will turn on LED3
 
 class State:
     """
@@ -122,7 +122,7 @@ class StateMachine:
     This class manages state transitions and associated actions for the
     calibration bench system.
     """
-    
+    runmode = True
     def __init__(self):
         """
         Initialize the state machine in IDLE state.
@@ -306,7 +306,11 @@ class StateMachine:
         """Main loop for the state machine"""
         ledthr =threading.Thread(target=ledscpt)
         ledthr.start()  # Start the LED control thread
-
+        modeselect = input ("Press 1 for PRECHECK DYNAMIC, 0 for PRECHECK STATIC: ") #this decides if later the dinamic or static led are turned on
+        if modeselect == 0:
+            runmode = True
+        if modeselect == 1:
+            runmode = False           
         while True:
             # Process current state
             if self.current_state == State.IDLE:
@@ -314,14 +318,7 @@ class StateMachine:
                 
                 for i in range(6):
                     print ("on idle")
-                    time.sleep(0.5)
-                self.transition_to(State.PRECHECK)
-                
-                modeselect = input ("Press 1 for PRECHECK DYNAMIC, 0 for PRECHECK STATIC: ") #this decides if later the dinamic or static led are turned on
-                if modeselect == 0:
-                    runmode = True
-                if modeselect == 1:
-                    runmode = False    
+                    time.sleep(0.5)                
 
             elif self.current_state == State.PRECHECK_DINAMIC:
                 for i in range(6):
