@@ -26,16 +26,7 @@ except (ModuleNotFoundError, ImportError):
     LED = MagicMock()
 import threading
 # Set up GPIO mode
-GPIO.setmode(GPIO.BCM)
 
-# Pins for switch
-
-INPUT_PIN_1 = 1  # Change to your first GPIO pin
-INPUT_PIN_2 = 18  # Change to your second GPIO pin
-
-# Set up the pins as inputs with pull-down resistors
-GPIO.setup(INPUT_PIN_1, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
-GPIO.setup(INPUT_PIN_2, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
 
 #Pins for leds
 
