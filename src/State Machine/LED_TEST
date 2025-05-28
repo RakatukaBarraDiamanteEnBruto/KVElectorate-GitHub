@@ -83,7 +83,8 @@ def ledscpt():
                 LED1.off()
                 time.sleep(0.2)
                 LED1.on()
-
+                time.sleep(0.2)  
+                
                 print("LEDs are ON in PRECHECK state")  
                 
         if KVEBench.current_state  == State.RUNNING and runmode == True: # RUNNING State LED Script, It just makes LED2 Blink during static test
@@ -92,12 +93,14 @@ def ledscpt():
                 LED2.off()
                 time.sleep(0.2)
                 LED2.on()
+                time.sleep(0.2)  
         if KVEBench.current_state  == State.RUNNING and runmode == False: # RUNNING State LED Script, It just makes LED3 Blink during dynamic test 
             while KVEBench.current_state == State.RUNNING:
 
                 LED3.off()
                 time.sleep(0.2)
                 LED3.on()           
+                time.sleep(0.2)
 
         if KVEBench.current_state  == State.COMPLETED: # COMPLETED State LED Script, It just makes LED1 ON
             while KVEBench.current_state == State.COMPLETED:
@@ -115,6 +118,7 @@ def ledscpt():
                 LED4.on()
                 time.sleep(0.2)
                 LED4.off()
+                time.sleep(0.2)
                 print("LEDs are ON in ERROR state")
 
 class StateMachine:
