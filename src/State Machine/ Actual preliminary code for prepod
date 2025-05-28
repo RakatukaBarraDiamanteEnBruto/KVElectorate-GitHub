@@ -39,11 +39,10 @@ GPIO.setup(INPUT_PIN_2, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
 
 #Pins for leds
 
-LED1 = LED(24) # IDLE Led
-LED2 = LED(25) # PRECHECK Led
-LED3 = LED(8)  # RUNNING Led
-LED4 = LED(7)  # COMPLETED Led
-LED5 = LED(12) # ERROR Led
+LED1 = LED(24) # PRECHECK Led
+LED2 = LED(25) # RUNNING STATIC Led
+LED3 = LED(8)  # RUNNING DINAMIC Led
+LED4 = LED(7)  # ERRROR Led
 
 #PINS for switch
 button = Button(23)
@@ -266,7 +265,7 @@ class StateMachine:
                 
             elif self.current_state == State.PRECHECK:
                 # Check if all thermocouples are connected
-                cy=0
+                cy=0 #Variable to control the while loop below
                 while INPUT_PIN_1== GPIO.HIGH:
                     LED1.on()
                     cy += 1
