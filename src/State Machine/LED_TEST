@@ -67,6 +67,7 @@ def ledscpt():
 
     if KVEBench.current_state  == State.PRECHECK_DINAMIC or KVEBench.current_state == State.PRECHECK_STATIC: # PRECHECK State LED Script, It just makes LED2 blink
         
+        print("All LEDS ARE OFF")
         #Turn off all LEDs before starting the PRECHECK state
         LED1.off() #PRECHECK LED
         LED2.off() #RUNNING STATIC LED
@@ -328,27 +329,28 @@ class StateMachine:
                     self.transition_to(State.PRECHECK_DINAMIC)
    
             elif self.current_state == State.PRECHECK_DINAMIC:
-                for i in range(6):
+                for i in range(8):
                     print ("on PRECHECK D")
                     time.sleep(0.5)
                 self.transition_to(State.RUNNING)
 
             elif self.current_state == State.PRECHECK_STATIC:
-                for i in range(6):
+                for i in range(8):
                     print ("on PRECHECK S")
                     time.sleep(0.5)
                 self.transition_to(State.RUNNING)
 
             elif self.current_state == State.RUNNING:
-                for i in range(6):
+                for i in range(8):
                     print ("on RUNNING")
                     time.sleep(0.5)
                 self.transition_to(State.COMPLETED)
                 
             elif self.current_state == State.COMPLETED:
-                # Wait for button press to return to idle
-                time.sleep(0.1)
-                
+                for i in range(8):
+                    print ("on COMPLETED")
+                    time.sleep(0.5)
+
             elif self.current_state == State.ERROR:
                 # Wait for button press to return to idle
                 time.sleep(0.1)
