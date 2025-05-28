@@ -315,16 +315,18 @@ class StateMachine:
         self.current_state = State.IDLE  # Initialize to IDLE state
         ledthr =threading.Thread(target=ledscpt)
         ledthr.start()  # Start the LED control thread
-        modeselect = input ("Press 1 for PRECHECK DYNAMIC, 0 for PRECHECK STATIC: ") #this decides if later the dinamic or static led are turned on
-        if modeselect == 0:
-            runmode = True
-        if modeselect == 1:
-            runmode = False           
+      
         while True:
             # Process current state
             if self.current_state == State.IDLE:
                 # Wait for button press
-                
+
+                modeselect = input ("Press 1 for PRECHECK DYNAMIC, 0 for PRECHECK STATIC: ") #this decides if later the dinamic or static led are turned on
+                if modeselect == 0:
+                    runmode = True
+                if modeselect == 1:
+                    runmode = False  
+
                 for i in range(6):
                     print ("on idle")
                     time.sleep(0.5)           
@@ -355,6 +357,7 @@ class StateMachine:
                 for i in range(8):
                     print ("on COMPLETED")
                     time.sleep(0.5)
+                self.transition_to(State.IDLE)    
 
             elif self.current_state == State.ERROR:
                 # Wait for button press to return to idle
