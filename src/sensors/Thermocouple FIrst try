@@ -12,9 +12,9 @@ import adafruit_mcp9600
 # Create the I2C bus
 i2c = busio.I2C(board.SCL, board.SDA)
 # Create the MCP9600 object
-mcp = adafruit_mcp9600.MCP9600(i2c, address=AMP1.I2C_ADDRESS)
+mcp = adafruit_mcp9600.MCP9600(i2c, address=0x86)
 # Set the thermocouple type
-mcp.thermocouple_type = adafruit_mcp9600.ThermocoupleType.K
+mcp.thermocouple_type = adafruit_mcp9600.ThermocoupleType.E
 # Set the reference junction temperature
 mcp.reference_junction_temperature = 25.0
 # Set the temperature unit
