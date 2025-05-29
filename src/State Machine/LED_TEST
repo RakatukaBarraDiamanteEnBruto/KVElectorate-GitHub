@@ -311,6 +311,8 @@ class StateMachine:
         print("Exiting ERROR state")
         # Turn off RED tower light
     def run(self):
+
+        buttonpress = 0
         global runmode
         """Main loop for the state machine"""
         self.current_state = State.IDLE  # Initialize to IDLE state
@@ -328,9 +330,11 @@ class StateMachine:
                 if modeselect == 1:
                     runmode = False  
                 print(runmode)
-                for i in range(6):
-                    print ("on idle")
-                    time.sleep(0.5)           
+                while  buttonpress == 0:
+                    if button.is_pressed:  # Button is pressed    
+                        print("on IDLE")
+                        buttonpress = 1
+
                 if runmode == True:
                     self.transition_to(State.PRECHECK_STATIC)         
                 elif runmode == False:
