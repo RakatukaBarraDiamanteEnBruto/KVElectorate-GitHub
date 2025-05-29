@@ -1,0 +1,126 @@
+"""Modular Thermocouple Data Logger for Raspberry Pi Pico
+- Reads up to 5 MCP9600 thermocouples via I2C
+- Stores time and temperature data in organized lists
+- Initialization mode to be determined externally"""
+
+
+import time
+import board
+import busio
+from adafruit_mcp9600 import MCP9600
+
+class ThermocoupleLogger:
+    def _init_(self):
+        """Initialize the data logger with default settings"""
+        # Hardware Configuration
+        self.I2C_SDA_PIN = board.GP0  # Default I2C0 SDA
+        self.I2C_SCL_PIN = board.GP1  # Default I2C0 SCL
+        self.THERMOCOUPLE_ADDRS = [0x60, 0x61, 0x62, 0x63, 0x64]  # MCP9600 defaults
+        
+        # Data Storage
+        self.rec_temp = [[] for _ in range(5)]  # Temperature readings
+        self.rec_time = [[] for _ in range(5)]  # Timestamps
+        
+        # System State
+        self.recording = False
+        self.thermocouples = []
+        self.i2c = None
+
+    def initialize_hardware(self):
+        """
+        Initialize I2C communication and thermocouple sensors
+        Returns: True if at least one sensor initialized successfully
+        """
+        try:
+            # Initialize I2C bus
+            self.i2c = busio.I2C(scl=self.I2C_SCL_PIN, sda=self.I2C_SDA_PIN, frequency=100000)
+            
+            # Initialize thermocouples
+            self.thermocouples = []
+            for addr in self.THERMOCOUPLE_ADDRS:
+                try:
+                    tc = MCP9600(self.i2c, address=addr)
+                    self.thermocouples.append(tc)
+                    print(f"Initialized thermocouple at 0x{addr:02X}")
+                except (ValueError, OSError):
+                    self.thermocouples.append(None)
+                    print(f"Failed to initialize thermocouple at 0x{addr:02X}")
+            
+            return any(tc is not None for tc in self.thermocouples)
+            
+        except Exception as e:
+            print(f"Hardware initialization failed: {e}")
+            return False
+
+    def collect_data(self, duration_sec=0, max_samples=0):
+        """
+        Collect data from all active thermocouples
+        Args:
+            duration_sec: Recording duration in seconds (0=continuous)
+            max_samples: Maximum samples to collect (0=unlimited)
+        """
+        if not self.thermocouples:
+            print("No thermocouples initialized!")
+            return
+            
+        self.recording = True
+        start_time = time.monotonic()
+        sample_count = 0
+        
+        print("Starting data collection...")
+        
+        try:
+            while self.recording:
+                # Check duration/sample limits
+                current_time = time.monotonic()
+                if (duration_sec > 0 and (current_time - start_time) >= duration_sec):
+                    break
+                if (max_samples > 0 and sample_count >= max_samples):
+                    break
+                
+                # Take synchronized readings
+                timestamp = time.monotonic()
+                for i, tc in enumerate(self.thermocouples):
+                    if tc:
+                        try:
+                            temp = tc.temperature
+                            self.rec_temp[i].append(temp)
+                            self.rec_time[i].append(timestamp)
+                        except OSError:
+                            self.rec_temp[i].append(None)
+                            self.rec_time[i].append(timestamp)
+                    else:
+                        self.rec_temp[i].append(None)
+                        self.rec_time[i].append(timestamp)
+                
+                sample_count += 1
+                time.sleep(0.05)  # 20Hz sampling rate
+                
+        except KeyboardInterrupt:
+            print("Data collection interrupted!")
+        finally:
+            self.recording = False
+            print(f"Collection complete. Stored {sample_count} samples per sensor.")
+
+    def get_data(self):
+        """Return recorded data as (temperatures, timestamps) tuple"""
+        return (self.rec_temp, self.rec_time)
+
+    def clear_data(self):
+        """Clear all stored data"""
+        self.rec_temp = [[] for _ in range(5)]
+        self.rec_time = [[] for _ in range(5)]
+
+# Example Usage
+if _name_ == "_main_":
+    logger = ThermocoupleLogger()
+    
+    if logger.initialize_hardware():
+        # Collect data for 10 seconds or max 100 samples
+        logger.collect_data(duration_sec=10, max_samples=100)
+        
+        # Access data for analysis
+        temperatures, timestamps = logger.get_data()
+        print(f"First thermocouple data: {temperatures[0]}")
+    else:
+        print("Failed to initialize hardware!")
