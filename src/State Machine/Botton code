@@ -1,4 +1,4 @@
-from gpiozero 
+import gpiozero
 
 
 Button = button.Button(23)  # GPIO pin 23
