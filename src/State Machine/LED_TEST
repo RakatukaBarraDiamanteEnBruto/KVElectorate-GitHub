@@ -32,12 +32,11 @@ runmode = True #This variable should be declared in the run function but should 
 
 LED1 = LED(24) # PRECHECK Led
 LED2 = LED(25) # RUNNING STATIC Led
-LED3 = LED(26)  # RUNNING DINAMIC Led
-LED4 = LED(17)  # ERRROR Led
+LED3 = LED(21)  # RUNNING DINAMIC Led
+LED4 = LED(20)  # ERRROR Led
 
 #PINS for switch
-button = Button(23)
-
+button = Button(26)
  # This variable will be used to decide which LED to turn on during the RUNNING state, if it is True it will turn on LED2, if it is False it will turn on LED3
 
 class State:
