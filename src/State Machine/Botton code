@@ -1,16 +1,21 @@
-import RPi.GPIO as GPIO
-import time
+from gpiozero import Button
+from time import sleep
 
-# Set up GPIO
-BUTTON_PIN = 23  # Change this to your GPIO pin
-GPIO.setmode(GPIO.BCM)
-GPIO.setup(BUTTON_PIN, GPIO.IN)  # Button to GND, internal pull-up
+# Setup
+BUTTON_PIN = 17  # GPIO pin connected to COM
+button = Button(BUTTON_PIN, pull_up=True)  # NO connected to GND (pull-up)
+
+print("Monitoring button (NO ↔ COM). Press Ctrl+C to exit.")
 
 try:
-    print("Waiting for button press...")
     while True:
-        if GPIO.input(BUTTON_PIN) == GPIO.HIGH:  # Button pressed (assuming pull-up)
+        if button.is_pressed:  # Button is pressed (NO ↔ COM closed)
             print("Button pressed!")
-            time.sleep(0.2)  # Simple debounce
+        else:  # Button is released (NO ↔ COM open)
+            print("Button released.", end="\r")  # Overwrites line to reduce spam
+        
+        sleep(0.1)  # Small delay to reduce CPU usage
+
 except KeyboardInterrupt:
-    GPIO.cleanup()
+    print("\nExiting...")
+    button.close()  # Cleanup
