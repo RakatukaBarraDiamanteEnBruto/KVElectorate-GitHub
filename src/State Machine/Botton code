@@ -1,9 +1,16 @@
-import gpiozero
+import RPi.GPIO as GPIO
+import time
 
+# Set up GPIO
+BUTTON_PIN = 17  # Change this to your GPIO pin
+GPIO.setmode(GPIO.BCM)
+GPIO.setup(BUTTON_PIN, GPIO.IN, pull_up_down=GPIO.PUD_UP)  # Button to GND, internal pull-up
 
-Button = button.Button(23)  # GPIO pin 23
-
-
-while True:
-    if Button.is_pressed:
-        print("Button is pressed")
+try:
+    print("Waiting for button press...")
+    while True:
+        if GPIO.input(BUTTON_PIN) == GPIO.LOW:  # Button pressed (assuming pull-up)
+            print("Button pressed!")
+            time.sleep(0.2)  # Simple debounce
+except KeyboardInterrupt:
+    GPIO.cleanup()
