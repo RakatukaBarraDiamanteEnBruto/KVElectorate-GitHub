@@ -350,6 +350,7 @@ class StateMachine:
                     if button.is_pressed:
                        self.transition_to(State.IDLE)   # Button is pressed    
                        time.sleep(0.5)  # Debounce delay
+                       break  # Exit the loop if button is pressed
                     time.sleep(0.5)
                 if  self.current_state == State.PRECHECK_DINAMIC:
                     self.transition_to(State.RUNNING)
@@ -359,7 +360,8 @@ class StateMachine:
                     print ("on RUNNING")
                     if button.is_pressed:
                        self.transition_to(State.IDLE)   # Button is pressed    
-                       time.sleep(0.5)  # Debounce delay                    
+                       time.sleep(0.5)  # Debounce delay 
+                       break  # Exit the loop if button is pressed                   
                     time.sleep(0.5)
                 if  self.current_state == State.PRECHECK_STATIC:       
                     self.transition_to(State.RUNNING)
@@ -370,6 +372,7 @@ class StateMachine:
                     if button.is_pressed:
                        self.transition_to(State.IDLE)   # Button is pressed
                        time.sleep(0.5)  # Debounce delay    
+                       break
                     time.sleep(0.5)
                 if self.current_state == State.RUNNING:
                     self.transition_to(State.COMPLETED)
