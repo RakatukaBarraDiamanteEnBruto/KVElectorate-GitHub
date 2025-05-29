@@ -32,8 +32,8 @@ runmode = True #This variable should be declared in the run function but should 
 
 LED1 = LED(24) # PRECHECK Led
 LED2 = LED(25) # RUNNING STATIC Led
-LED3 = LED(21)  # RUNNING DINAMIC Led
-LED4 = LED(20)  # ERRROR Led
+LED3 = LED(20)  # RUNNING DINAMIC Led
+LED4 = LED(21)  # ERRROR Led
 
 #PINS for switch
 button = Button(26)
@@ -319,6 +319,8 @@ class StateMachine:
         ledthr.start()  # Start the LED control thread
       
         while True:
+            
+            buttonpress = 0
             # Process current state
             if self.current_state == State.IDLE:
                 # Wait for button press
@@ -330,9 +332,11 @@ class StateMachine:
                     runmode = False  
                 print(runmode)
                 while  buttonpress == 0:
+                    print("on IDLE, waiting for button press")
                     if button.is_pressed:  # Button is pressed    
-                        print("on IDLE")
+                        
                         buttonpress = 1
+                        print("Button pressed, transitioning to PRECHECK state")
 
                 if runmode == True:
                     self.transition_to(State.PRECHECK_STATIC)         
