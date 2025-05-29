@@ -14,7 +14,7 @@ try:
         else:  # Button is released (NO ↔ COM open)
             print("Button released.", end="\r")  # Overwrites line to reduce spam
         
-        sleep(0.1)  # Small delay to reduce CPU usage
+       
 
 except KeyboardInterrupt:
     print("\nExiting...")
