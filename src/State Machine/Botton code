@@ -1,9 +1,0 @@
-import gpiozero
-
-
-Button = button.Button(23)  # GPIO pin 23
-
-
-while True:
-    if Button.is_pressed:
-        print("Button is pressed")
