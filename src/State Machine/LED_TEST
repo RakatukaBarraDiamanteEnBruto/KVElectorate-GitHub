@@ -357,7 +357,8 @@ class StateMachine:
                     if button.is_pressed:
                        self.transition_to(State.IDLE)   # Button is pressed    
                     time.sleep(0.5)
-                self.transition_to(State.RUNNING)
+                if  self.current_state == State.PRECHECK_STATIC:       
+                    self.transition_to(State.RUNNING)
 
             elif self.current_state == State.RUNNING:
                 for i in range(12):
