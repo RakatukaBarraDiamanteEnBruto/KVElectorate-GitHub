@@ -11,7 +11,7 @@ while True:
     if button.is_pressed:  # Button is pressed (NO ↔ COM closed)
         print("Button pressed!")
     else:  # Button is released (NO ↔ COM open)
-        print("Button released.", end="\r")  # Overwrites line to reduce spam
+        print("Button released.")  # Overwrites line to reduce spam
     sleep(0.1)  # Polling interval
 
 
