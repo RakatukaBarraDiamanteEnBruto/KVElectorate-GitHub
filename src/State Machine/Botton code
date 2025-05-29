@@ -2,7 +2,7 @@ import RPi.GPIO as GPIO
 import time
 
 # Set up GPIO
-BUTTON_PIN = 17  # Change this to your GPIO pin
+BUTTON_PIN = 23  # Change this to your GPIO pin
 GPIO.setmode(GPIO.BCM)
 GPIO.setup(BUTTON_PIN, GPIO.IN, pull_up_down=GPIO.PUD_UP)  # Button to GND, internal pull-up
 
