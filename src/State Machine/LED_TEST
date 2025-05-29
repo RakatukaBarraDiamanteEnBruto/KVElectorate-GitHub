@@ -344,21 +344,28 @@ class StateMachine:
                     self.transition_to(State.PRECHECK_DINAMIC)
    
             elif self.current_state == State.PRECHECK_DINAMIC:
-                for i in range(8):
-                    print ("on PRECHECK D")
+                for i in range(12):
+                    print ("on RUNNING")
+                    if button.is_pressed:
+                       self.transition_to(State.IDLE)   # Button is pressed    
                     time.sleep(0.5)
                 self.transition_to(State.RUNNING)
 
             elif self.current_state == State.PRECHECK_STATIC:
-                for i in range(8):
-                    print ("on PRECHECK S")
+                for i in range(12):
+                    print ("on RUNNING")
+                    if button.is_pressed:
+                       self.transition_to(State.IDLE)   # Button is pressed    
                     time.sleep(0.5)
                 self.transition_to(State.RUNNING)
 
             elif self.current_state == State.RUNNING:
-                for i in range(8):
+                for i in range(12):
                     print ("on RUNNING")
+                    if button.is_pressed:
+                       self.transition_to(State.IDLE)   # Button is pressed    
                     time.sleep(0.5)
+
                 self.transition_to(State.COMPLETED)
                 
             elif self.current_state == State.COMPLETED:
