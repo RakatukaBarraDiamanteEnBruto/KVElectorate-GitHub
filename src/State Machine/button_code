@@ -7,15 +7,11 @@ button = Button(BUTTON_PIN, pull_up=True)  # NO connected to GND (pull-up)
 
 print("Monitoring button (NO ↔ COM). Press Ctrl+C to exit.")
 
-try:
-    while True:
-        if button.is_pressed:  # Button is pressed (NO ↔ COM closed)
-            print("Button pressed!")
-        else:  # Button is released (NO ↔ COM open)
-            print("Button released.", end="\r")  # Overwrites line to reduce spam
-        
-       
+while True:
+    if button.is_pressed:  # Button is pressed (NO ↔ COM closed)
+        print("Button pressed!")
+    else:  # Button is released (NO ↔ COM open)
+        print("Button released.", end="\r")  # Overwrites line to reduce spam
+    sleep(0.1)  # Polling interval
 
-except KeyboardInterrupt:
-    print("\nExiting...")
-    button.close()  # Cleanup
+
