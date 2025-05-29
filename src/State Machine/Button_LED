@@ -1,0 +1,6 @@
+from gpiozero import LED
+
+
+LED1 = LED(18) 
+
+LED1.on()  # Turn on the LED
