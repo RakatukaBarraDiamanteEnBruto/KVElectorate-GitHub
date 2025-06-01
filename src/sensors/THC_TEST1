@@ -13,8 +13,8 @@ class ThermocoupleLogger:
     def __init__(self):
         """Initialize the data logger with default settings"""
         # Hardware Configuration
-        self.I2C_SDA_PIN = board.GP0  # Default I2C0 SDA
-        self.I2C_SCL_PIN = board.GP1  # Default I2C0 SCL
+        self.I2C_SDA_PIN = board.SDA  # Default I2C0 SDA
+        self.I2C_SCL_PIN = board.SCL  # Default I2C0 SCL
         self.THERMOCOUPLE_ADDRS = [0x60, 0x61, 0x62, 0x63]  # MCP9600 defaults
         
         # Data Storage
