@@ -15,7 +15,7 @@ class ThermocoupleLogger:
         # Hardware Configuration
         self.I2C_SDA_PIN = board.SDA  # Default I2C0 SDA
         self.I2C_SCL_PIN = board.SCL  # Default I2C0 SCL
-        self.THERMOCOUPLE_ADDRS = [0x60, 0x61, 0x62, 0x63]  # MCP9600 defaults
+        self.THERMOCOUPLE_ADDRS = [0x60, 0x67, 0x62, 0x63]  # MCP9600 defaults
         
         # Data Storage
         self.rec_temp = [[] for _ in range(4)]  # Temperature readings
