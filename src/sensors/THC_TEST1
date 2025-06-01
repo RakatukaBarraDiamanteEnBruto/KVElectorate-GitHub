@@ -112,7 +112,7 @@ class ThermocoupleLogger:
         self.rec_time = [[] for _ in range(5)]
 
 # Example Usage
-if __name__ == "_main_":
+if __name__ == "__main__":
     logger = ThermocoupleLogger()
     
     if logger.initialize_hardware():
