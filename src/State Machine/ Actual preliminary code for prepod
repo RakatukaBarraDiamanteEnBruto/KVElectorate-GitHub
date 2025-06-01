@@ -41,13 +41,82 @@ GPIO.setup(INPUT_PIN_2, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
 
 LED1 = LED(24) # PRECHECK Led
 LED2 = LED(25) # RUNNING STATIC Led
-LED3 = LED(8)  # RUNNING DINAMIC Led
-LED4 = LED(7)  # ERRROR Led
+LED3 = LED(20)  # RUNNING DINAMIC Led
+LED4 = LED(21)  # ERRROR Led
 
 #PINS for switch
-button = Button(23)
+button = Button(26)
+
+def ledscpt(): 
+    global runmode
+    while True:
+        if KVEBench.current_state  == State.IDLE:    # IDLE State LED Script, It just makes all LED ON
+                LED1.on() #PRECHECK LED
+                LED2.on() #RUNNING STATIC LED
+                LED3.on() #RUNNING DINAMIC LED
+                LED4.on()   #ERROR LED
+                while State.IDLE == True:
+
+                    print("LEDs are ON in IDLE state")  
+                    sleep(1)
+                
+                
 
 
+        if KVEBench.current_state  == State.PRECHECK_DINAMIC or KVEBench.current_state == State.PRECHECK_STATIC: # PRECHECK State LED Script, It just makes LED2 blink
+            
+            print("All LEDS ARE OFF")
+            #Turn off all LEDs before starting the PRECHECK state
+            LED1.off() #PRECHECK LED
+            LED2.off() #RUNNING STATIC LED
+            LED3.off() #RUNNING DINAMIC LED
+            LED4.off()   #ERROR LED
+            
+
+
+            while KVEBench.current_state  == State.PRECHECK_DINAMIC or KVEBench.current_state == State.PRECHECK_STATIC: # It will blink LED2 it will also set a variable that will decide what LED 
+                                                                                    # set if the next LED is blue or white for the static or dynamic running mode
+                            
+                LED1.off()
+                time.sleep(0.2)
+                LED1.on()
+                time.sleep(0.2)  
+                
+                print("LEDs are ON in PRECHECK state")  
+                
+        if KVEBench.current_state  == State.RUNNING and runmode == True: # RUNNING State LED Script, It just makes LED2 Blink during static test
+            while KVEBench.current_state == State.RUNNING:
+
+                LED2.off()
+                time.sleep(0.2)
+                LED2.on()
+                time.sleep(0.2)  
+        if KVEBench.current_state  == State.RUNNING and runmode == False: # RUNNING State LED Script, It just makes LED3 Blink during dynamic test 
+            while KVEBench.current_state == State.RUNNING:
+
+                LED3.off()
+                time.sleep(0.2)
+                LED3.on()           
+                time.sleep(0.2)
+
+        if KVEBench.current_state  == State.COMPLETED: # COMPLETED State LED Script, It just makes LED1 ON
+            while KVEBench.current_state == State.COMPLETED:
+                if KVEBench.current_state  == State.COMPLETED and runmode == True: # COMPLETED State LED Script, It just makes LED2 on during static test
+                    while KVEBench.current_state == State.COMPLETED:
+
+                        LED2.on()
+
+                if KVEBench.current_state  == State.COMPLETED and runmode == False: # COMPLETED State LED Script, It just makes LED3 on after dynamic test 
+                    while KVEBench.current_state == State.COMPLETED:
+
+                        LED3.on()
+        if KVEBench.current_state == State.ERROR: # ERROR State LED Script, It just makes LED4 blink
+            while KVEBench.current_state == State.ERROR:
+                LED4.on()
+                time.sleep(0.2)
+                LED4.off()
+                time.sleep(0.2)
+                print("LEDs are ON in ERROR state")
 
 class State:
     """
@@ -249,54 +318,60 @@ class StateMachine:
         print("Exiting ERROR state")
         # Turn off RED tower light
     def run(self):
+        global runmode
         """Main loop for the state machine"""
-        
+        self.current_state = State.IDLE  # Initialize to IDLE state
+        ledthr =threading.Thread(target=ledscpt)
+        ledthr.start()  # Start the LED control thread
+      
         while True:
             # Process current state
             if self.current_state == State.IDLE:
                 # Wait for button press
-                
-                while INPUT_PIN_1 and INPUT_PIN_2 == GPIO.LOW:
-                    # Wait for button press
-                    print("waiting for mode select")
-                if GPIO.input(INPUT_PIN_1) == GPIO.HIGH: 
-                    print("Switch activated, transitioning to PRECHECK")
-                    self.transition_to(State.PRECHECK)
-                
-            elif self.current_state == State.PRECHECK:
-                # Check if all thermocouples are connected
-                cy=0 #Variable to control the while loop below
-                while INPUT_PIN_1== GPIO.HIGH:
-                    LED1.on()
-                    cy += 1
-                    time.sleep(1)
-                    if cy == 3:
-                        print("All thermocouples connected, transitioning to RUNNING")
-                        LED1.off()
-                        self.transition_to(State.RUNNING)
-                    else:
-                        print("Waiting for all thermocouples to be connected")
-                
-                # Small delay
-                time.sleep(0.5)
-            elif self.current_state == State.COMPLETED:
-                LED2.on()
-                cy1=0
-                while INPUT_PIN_1== GPIO.HIGH:
-                    cy1 += 1
-                    time.sleep(1)
-                    if cy1 == 3:
-                        print("Test completed, transitioning to IDLE")
-                        LED2.off()
-                        self.transition_to(State.IDLE)
+
+                modeselect = int(input ("Press 1 for PRECHECK DYNAMIC, 0 for PRECHECK STATIC: ")) #this decides if later the dinamic or static led are turned on we will change it with the switch later on.
+                if modeselect == 0:
+                    runmode = True
+                if modeselect == 1:
+                    runmode = False  
+                print(runmode)
+                for i in range(6):
+                    print ("on idle")
+                    time.sleep(0.5)           
+                if runmode == True:
+                    self.transition_to(State.PRECHECK_STATIC)         
+                elif runmode == False:
+                    self.transition_to(State.PRECHECK_DINAMIC)
+   
+            elif self.current_state == State.PRECHECK_DINAMIC:
+                for i in range(8):
+                    print ("on PRECHECK D")
+                    time.sleep(0.5)
+                self.transition_to(State.RUNNING)
+
+            elif self.current_state == State.PRECHECK_STATIC:
+                for i in range(8):
+                    print ("on PRECHECK S")
+                    time.sleep(0.5)
+                self.transition_to(State.RUNNING)
+
+            elif self.current_state == State.RUNNING:
+                for i in range(8):
+                    print ("on RUNNING")
+                    time.sleep(0.5)
+                self.transition_to(State.COMPLETED)
                 
             elif self.current_state == State.COMPLETED:
-                # Wait for button press to return to idle
-                time.sleep(0.1)
-                
+                for i in range(8):
+                    print ("on COMPLETED")
+                    time.sleep(0.5)
+                self.transition_to(State.IDLE)    
+
             elif self.current_state == State.ERROR:
                 # Wait for button press to return to idle
                 time.sleep(0.1)
+                self._on_enter_error
+                
 # Example usage
 
 """
@@ -330,7 +405,4 @@ Such as:
 
 
 KVEBench = StateMachine()
-KVEBench.transition_to(State.PRECHECK)
-KVEBench.transition_to(State.RUNNING)
-KVEBench.transition_to(State.COMPLETED)
-KVEBench.transition_to(State.IDLE)
+KVEBench.run()  # Start the state machine
