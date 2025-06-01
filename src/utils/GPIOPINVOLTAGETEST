@@ -1,0 +1,20 @@
+import RPi.GPIO as GPIO
+import time
+
+# Set up GPIO
+GPIO_PIN = 17  # Change this to your desired GPIO pin
+GPIO.setmode(GPIO.BCM)  # Use Broadcom pin numbering
+GPIO.setup(GPIO_PIN, GPIO.OUT)
+
+try:
+    print(f"Setting GPIO {GPIO_PIN} to HIGH continuously")
+    GPIO.output(GPIO_PIN, GPIO.HIGH)
+    
+    # Keep the program running to maintain the HIGH signal
+    while True:
+        time.sleep(1)  # Just keep running
+
+except KeyboardInterrupt:
+    print("\nCleaning up GPIO...")
+    GPIO.cleanup()
+    print("Program terminated")
