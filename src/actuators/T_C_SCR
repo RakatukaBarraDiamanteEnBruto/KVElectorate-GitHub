@@ -6,11 +6,14 @@ except ModuleNotFoundError:
 import time
 
 FANCHAN = 17 # GPIO Pin for the fan mght have to change later.
+FANSAN = 18 # GPIO Pin for the fan from the heater mght have to change later.
 HEATCHAN = 27 # GPIO Pin for the heater mght have to change later.
+
 
 def tempsetup():
     GPIO.setmode(GPIO.BOARD)
     GPIO.setup(FANCHAN, GPIO.OUT, initial=GPIO.LOW)
+    GPIO.setup(FANSAN, GPIO.OUT, initial=GPIO.LOW)
     GPIO.setup(HEATCHAN, GPIO.OUT, initial=GPIO.LOW)
 def tempcontrol:
     """
@@ -25,17 +28,21 @@ def tempcontrol:
         init_temp = thempocouple.read_temp()
         if init_temp < 20:  # Example threshold
             GPIO.output(FANCHAN, GPIO.HIGH)  # Turn on fan
+            GPIO.output(FANSAN, GPIO.HIGH)   # Turn on fan from heater
             GPIO.output(HEATCHAN, GPIO.LOW)   # Turn off heater
             time.sleep(1)
         elif init_temp > 30:  # Example threshold
             GPIO.output(FANCHAN, GPIO.LOW)   # Turn off fan
+            GPIO.output(FANSAN, GPIO.LOW)   # Turn off fan
             GPIO.output(HEATCHAN, GPIO.HIGH)  # Turn on heater
             time.sleep(1)
         else:
             GPIO.output(FANCHAN, GPIO.LOW)   # Turn off fan
+            GPIO.output(FANSAN, GPIO.LOW)   # Turn off fan
             GPIO.output(HEATCHAN, GPIO.LOW)   # Turn off heater
         end_temp = thempocouple.read_temp()
         if abs(end_temp - init_temp) < 0.1 and 29<end_temp<31:  # If temperature change is negligible and witihn an acceptable range 
             break 
         GPIO.output(FANCHAN, GPIO.LOW)   # Turn off fan
+        GPIO.output(FANSAN, GPIO.LOW)   # Turn off fan
         GPIO.output(HEATCHAN, GPIO.LOW)   # Turn off heater after reaching the target temperature
