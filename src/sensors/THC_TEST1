@@ -10,16 +10,16 @@ import busio
 from adafruit_mcp9600 import MCP9600
 
 class ThermocoupleLogger:
-    def _init_(self):
+    def __init__(self):
         """Initialize the data logger with default settings"""
         # Hardware Configuration
         self.I2C_SDA_PIN = board.GP0  # Default I2C0 SDA
         self.I2C_SCL_PIN = board.GP1  # Default I2C0 SCL
-        self.THERMOCOUPLE_ADDRS = [0x60, 0x61, 0x62, 0x63, 0x64]  # MCP9600 defaults
+        self.THERMOCOUPLE_ADDRS = [0x60, 0x61, 0x62, 0x63]  # MCP9600 defaults
         
         # Data Storage
-        self.rec_temp = [[] for _ in range(5)]  # Temperature readings
-        self.rec_time = [[] for _ in range(5)]  # Timestamps
+        self.rec_temp = [[] for _ in range(4)]  # Temperature readings
+        self.rec_time = [[] for _ in range(4)]  # Timestamps
         
         # System State
         self.recording = False
@@ -112,7 +112,7 @@ class ThermocoupleLogger:
         self.rec_time = [[] for _ in range(5)]
 
 # Example Usage
-if __name__ == "_main_":
+if __name__ == "__main__":
     logger = ThermocoupleLogger()
     
     if logger.initialize_hardware():
