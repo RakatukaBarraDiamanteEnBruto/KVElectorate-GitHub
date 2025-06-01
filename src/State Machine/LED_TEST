@@ -320,7 +320,7 @@ class StateMachine:
       
         while True:
             
-            buttonpress = 0
+            buttonpress = 0 # Sets buttonpress to 0 at the start of each loop iteration
             # Process current state
             if self.current_state == State.IDLE:
                 # Wait for button press
@@ -335,15 +335,18 @@ class StateMachine:
                     print("on IDLE, waiting for button press")
                     if button.is_pressed:  # Button is pressed    
                         
-                        buttonpress = 1
+                        buttonpress = 1 
                         print("Button pressed, transitioning to PRECHECK state")
                         time.sleep(0.5)  # Debounce delay
 
+                # Transition to PRECHECK state based on runmode
                 if runmode == True:
                     self.transition_to(State.PRECHECK_STATIC)         
                 elif runmode == False:
                     self.transition_to(State.PRECHECK_DINAMIC)
    
+
+            ############# This is the part were the state machine will run the precheck and running states #####################                
             elif self.current_state == State.PRECHECK_DINAMIC:
                 for i in range(12):
                     print ("on RUNNING")
@@ -352,8 +355,8 @@ class StateMachine:
                        time.sleep(0.5)  # Debounce delay
                        break  # Exit the loop if button is pressed
                     time.sleep(0.5)
-                if  self.current_state == State.PRECHECK_DINAMIC:
-                    self.transition_to(State.RUNNING)
+                if  self.current_state == State.PRECHECK_DINAMIC: # If the state is still PRECHECK_DINAMIC after the loop Mainly to let the state change to idle when the button is pressedG
+                    self.transition_to(State.RUNNING)               # You will similar clauses in the other states 
 
             elif self.current_state == State.PRECHECK_STATIC:
                 for i in range(12):
@@ -363,7 +366,7 @@ class StateMachine:
                        time.sleep(0.5)  # Debounce delay 
                        break  # Exit the loop if button is pressed                   
                     time.sleep(0.5)
-                if  self.current_state == State.PRECHECK_STATIC:       
+                if  self.current_state == State.PRECHECK_STATIC:        
                     self.transition_to(State.RUNNING)
 
             elif self.current_state == State.RUNNING:
