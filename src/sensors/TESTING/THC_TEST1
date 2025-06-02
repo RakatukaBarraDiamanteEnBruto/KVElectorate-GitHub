@@ -15,11 +15,11 @@ class ThermocoupleLogger:
         # Hardware Configuration
         self.I2C_SDA_PIN = board.SDA  # Default I2C0 SDA
         self.I2C_SCL_PIN = board.SCL  # Default I2C0 SCL
-        self.THERMOCOUPLE_ADDRS = [0x60, 0x67, 0x66]  # MCP9600 defaults
+        self.THERMOCOUPLE_ADDRS = [0x60, 0x65, 0x66, 0x67]  # MCP9600 defaults
         
         # Data Storage
-        self.rec_temp = [[] for _ in range(3)]  # Temperature readings
-        self.rec_time = [[] for _ in range(3)]  # Timestamps
+        self.rec_temp = [[] for _ in range(4)]  # Temperature readings
+        self.rec_time = [[] for _ in range(4)]  # Timestamps
         
         # System State
         self.recording = False
@@ -117,8 +117,8 @@ class ThermocoupleLogger:
 
     def clear_data(self):
         """Clear all stored data"""
-        self.rec_temp = [[] for _ in range(3)]
-        self.rec_time = [[] for _ in range(3)]
+        self.rec_temp = [[] for _ in range(4)]
+        self.rec_time = [[] for _ in range(4)]
 
 # Example Usage
 if __name__ == "__main__":
