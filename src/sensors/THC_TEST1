@@ -80,6 +80,7 @@ class ThermocoupleLogger:
                 
                 # Take synchronized readings
                 timestamp = time.monotonic()
+                readings = []
                 for i, tc in enumerate(self.thermocouples):
                     if tc:
                         try:
@@ -87,14 +88,22 @@ class ThermocoupleLogger:
                             self.rec_temp[i].append(temp)
                             self.rec_time[i].append(timestamp)
                         except OSError:
+                            temp = None
                             self.rec_temp[i].append(None)
                             self.rec_time[i].append(timestamp)
                     else:
+                        temp = None
                         self.rec_temp[i].append(None)
                         self.rec_time[i].append(timestamp)
+                    readings.append((temp, timestamp))
                 
+                #Print readings every 0.5 seconds
+                for idx, (temp, t) in enumerate(readings):
+                    print(f"TH{idx+1} = ({temp}, {t})", end='  ')
+                print() 
+
                 sample_count += 1
-                time.sleep(0.05)  # 20Hz sampling rate
+                time.sleep(0.5)  # 2Hz sampling rate AKA printing every 0.5 seconds
                 
         except KeyboardInterrupt:
             print("Data collection interrupted!")
