@@ -471,9 +471,12 @@ class StateMachine:
                     runmode = False  
                 print(runmode)
                 while self.current_state == State.IDLE:
+                    print("System in IDLE state, waiting for button...")
                     if runmode == True and button.is_pressed:
+                        time.sleep(0.1)  # Debounce delay
                         self.transition_to(State.PRECHECK_STATIC)         
                     elif runmode == False and button.is_pressed:
+                        time.sleep(0.1)
                         self.transition_to(State.PRECHECK_DINAMIC)
    
             elif self.current_state == State.PRECHECK_DINAMIC:
