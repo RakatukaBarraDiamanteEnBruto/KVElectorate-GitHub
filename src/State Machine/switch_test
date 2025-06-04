@@ -1,0 +1,39 @@
+import RPi.GPIO as GPIO
+import time
+
+# Set up GPIO pins
+GPIO.setmode(GPIO.BCM)  # Use Broadcom pin numbering
+
+# Define the pins connected to your three-state switch
+# For a three-state switch, you'll typically need two input pins
+SWITCH_PIN1 = 12  # First switch position (e.g., left)
+SWITCH_PIN2 = 25  # Second switch position (e.g., right)
+
+# Set up the GPIO pins as inputs with pull-down resistors
+GPIO.setup(SWITCH_PIN1, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
+GPIO.setup(SWITCH_PIN2, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
+
+def get_switch_state():
+    """Read the current state of the three-state switch"""
+    state1 = GPIO.input(SWITCH_PIN1)
+    state2 = GPIO.input(SWITCH_PIN2)
+    
+    if state1 and not state2:
+        return "Position 1"  # First position active
+    elif state2 and not state1:
+        return "Position 2"  # Second position active
+    else:
+        return "Neutral"     # Center position (both inputs low)
+
+try:
+    print("Testing three-state switch. Press CTRL+C to exit.")
+    print("Switch positions should be wired so only one pin is high at a time.")
+    
+    while True:
+        current_state = get_switch_state()
+        print(f"Switch state: {current_state}", end='\r')
+        time.sleep(0.1)  # Short delay to reduce CPU usage
+
+except KeyboardInterrupt:
+    print("\nExiting...")
+    GPIO.cleanup()  # Clean up GPIO on exit
