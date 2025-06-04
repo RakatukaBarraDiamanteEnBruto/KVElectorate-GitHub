@@ -467,9 +467,16 @@ class StateMachine:
                 # Wait for button press
 
                 print ("Move to choose PRECHECK DYNAMIC or PRECHECK STATIC: ") #this decides if later the dinamic or static led are turned on we will change it with the switch later on.
-
+                print("System in IDLE state, waiting for button...")
                 while self.current_state == State.IDLE:
-                    print("System in IDLE state, waiting for button...")
+                    
+                    if state1 and not state2:
+                        print(f"Static", end='\r')   # First position active
+                    elif state2 and not state1:
+                        print("Dinamic", end='\r')   # Second position active
+                    else:
+                        print("No Mode", end='\r')     # Center position (both inputs low)
+
                     if state1 and not state2 and True and button.is_pressed:
                         time.sleep(0.1)  # Debounce delay
                         self.transition_to(State.PRECHECK_STATIC)  
