@@ -2,6 +2,19 @@
 If the libraries are not found, mock objects are used to simulate their behavior for testing purposes.
 This allows the code to run without actual hardware, making it easier to test the state machine logic."""
 
+"""
+Features Implemented:
+- State machine with multiple states (IDLE, PRECHECK_DINAMIC, PRECHECK_STATIC, RUNNING, COMPLETED, ERROR)
+- State transitions with entry and exit actions
+- LED control based on state
+- Button input handling for state transitions
+- Dinamic and static modes for running tests
+- Error handling with error messages
+- Threading for LED control to run concurrently with state machine logic
+
+
+
+"""
 try:
     import RPi.GPIO as GPIO
 except ModuleNotFoundError:
