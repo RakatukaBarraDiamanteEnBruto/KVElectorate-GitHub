@@ -65,7 +65,7 @@ LED3 = LED(20)  # RUNNING DINAMIC Led
 LED4 = LED(21)  # ERRROR Led
 
 #PINS for switch
-button = Button(26)
+button = Button(6)
 
 class ThermocoupleLogger:
     def __init__(self):
