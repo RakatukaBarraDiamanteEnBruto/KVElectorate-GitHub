@@ -99,7 +99,7 @@ class ThermocoupleLogger:
                 
                 #Print readings every 0.5 seconds
                 for idx, (temp, t) in enumerate(readings):
-                    print(f"TH{idx+1} = ({temp}, {t})", end='  ')
+                    print(f"TH{idx+1} = ({temp} Cº , {t} s)", end='  ')
                 print() 
 
                 sample_count += 1
@@ -133,3 +133,4 @@ if __name__ == "__main__":
         print(f"First thermocouple data: {temperatures[0]}")
     else:
         print("Failed to initialize hardware!")
+    logger.get_data
