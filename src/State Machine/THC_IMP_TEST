@@ -39,7 +39,9 @@ except (ModuleNotFoundError, ImportError):
     LED = MagicMock()
 import board
 import busio
-from adafruit_mcp9600 import MCP960
+
+from adafruit_mcp9600 import MCP9600
+
 import threading
 
 
