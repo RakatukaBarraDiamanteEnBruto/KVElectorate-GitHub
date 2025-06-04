@@ -43,6 +43,6 @@ def tempcontrol:
         end_temp = thempocouple.read_temp()
         if abs(end_temp - init_temp) < 0.1 and 29<end_temp<31:  # If temperature change is negligible and witihn an acceptable range 
             break 
-        GPIO.output(FANCHAN, GPIO.LOW)   # Turn off fan
-        GPIO.output(FANSAN, GPIO.LOW)   # Turn off fan
-        GPIO.output(HEATCHAN, GPIO.LOW)   # Turn off heater after reaching the target temperature
+    GPIO.output(FANCHAN, GPIO.LOW)   # Turn off fan
+    GPIO.output(FANSAN, GPIO.LOW)   # Turn off fan
+    GPIO.output(HEATCHAN, GPIO.LOW)   # Turn off heater after reaching the target temperature
