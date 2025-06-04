@@ -456,7 +456,8 @@ class StateMachine:
         self.current_state = State.IDLE  # Initialize to IDLE state
         ledthr =threading.Thread(target=ledscpt)
         ledthr.start()  # Start the LED control thread
-      
+        logger = ThermocoupleLogger()
+        
         while True:
             runmode = True  # Default to static mode, can be changed by user input
             # Process current state
@@ -478,28 +479,23 @@ class StateMachine:
                     self.transition_to(State.PRECHECK_DINAMIC)
    
             elif self.current_state == State.PRECHECK_DINAMIC:
-                for i in range(8):
-                    print ("on PRECHECK D")
-                    time.sleep(0.5)
+                logger.initialize_hardware()
                 self.transition_to(State.RUNNING)
 
             elif self.current_state == State.PRECHECK_STATIC:
-                for i in range(8):
-                    print ("on PRECHECK S")
-                    time.sleep(0.5)
+                logger.initialize_hardware()
                 self.transition_to(State.RUNNING)
 
             elif self.current_state == State.RUNNING:
-                logger = ThermocoupleLogger()
-                if logger.initialize_hardware():
-                        # Collect data for 10 seconds or max 100 samples
-                        logger.collect_data(duration_sec=10, max_samples=100)
-                        
-                        # Access data for analysis
-                        temperatures, timestamps = logger.get_data()
-                        print("First thermocouple data:")
-                        for temp, t in zip(temperatures[0], timestamps[0]):
-                            print(f"{temp} Cº, {t} s")
+
+                # Collect data for 10 seconds or max 100 samples
+                logger.collect_data(duration_sec=10, max_samples=100)
+                
+                # Access data for analysis
+                temperatures, timestamps = logger.get_data()
+                print("First thermocouple data:")
+                for temp, t in zip(temperatures[0], timestamps[0]):
+                    print(f"{temp} Cº, {t} s")
                         
                 else:
                         print("Failed to initialize hardware!")                
