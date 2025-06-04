@@ -117,7 +117,7 @@ class ThermocoupleLogger:
 
     def get_data(self):
         """Return recorded data as (temperatures, timestamps) tuple"""
-        return (self.rec_temp and self.rec_time)
+        return (self.rec_temp , self.rec_time)
 
     def clear_data(self):
         """Clear all stored data"""
@@ -137,4 +137,4 @@ if __name__ == "__main__":
         print(f"First thermocouple data: {temperatures[0]}")
     else:
         print("Failed to initialize hardware!")
-    logger.get_data
+logger.get_data
