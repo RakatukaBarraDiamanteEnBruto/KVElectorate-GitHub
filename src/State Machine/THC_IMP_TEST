@@ -476,7 +476,7 @@ class StateMachine:
                         time.sleep(0.1)  # Debounce delay
                         self.transition_to(State.PRECHECK_STATIC)  
                         print(self.current_state)       
-                    elif runmode == False and button.is_pressed:
+                    if runmode == False and button.is_pressed:
                         time.sleep(0.1)
                         self.transition_to(State.PRECHECK_DINAMIC)
                         print(self.current_state)   
