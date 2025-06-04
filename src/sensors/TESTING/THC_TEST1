@@ -134,7 +134,7 @@ if __name__ == "__main__":
         
         # Access data for analysis
         temperatures, timestamps = logger.get_data()
-        print(f"First thermocouple data: {temperatures[0]}")
+        print(f"First thermocouple data: {temperatures[0], timestamps[0]}")
     else:
         print("Failed to initialize hardware!")
 logger.get_data
