@@ -469,7 +469,8 @@ class StateMachine:
                 print ("Move to choose PRECHECK DYNAMIC or PRECHECK STATIC: ") #this decides if later the dinamic or static led are turned on we will change it with the switch later on.
                 print("System in IDLE state, waiting for button...")
                 while self.current_state == State.IDLE:
-                    
+                    state1 = GPIO.input(SWITCH_PIN_1) #Change to dinamic and static later
+                    state2 = GPIO.input(SWITCH_PIN_2)
                     if state1 and not state2:
                         print(f"Static", end='\r')   # First position active
                     elif state2 and not state1:
