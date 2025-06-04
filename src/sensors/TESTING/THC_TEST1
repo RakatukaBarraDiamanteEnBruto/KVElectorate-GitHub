@@ -1,8 +1,12 @@
 """Modular Thermocouple Data Logger for Raspberry Pi Pico
 - Reads up to 5 MCP9600 thermocouples via I2C
 - Stores time and temperature data in organized lists
-- Initialization mode to be determined externally"""
+- Initialization mode to be determined externally
 
+Changes to it:
+
+Make it so the time recorded is from the start of the test
+Make sure the time recorded is shown in get data funtcion. Right now i dont see it"""
 
 import time
 import board
@@ -113,7 +117,7 @@ class ThermocoupleLogger:
 
     def get_data(self):
         """Return recorded data as (temperatures, timestamps) tuple"""
-        return (self.rec_temp, self.rec_time)
+        return (self.rec_temp and self.rec_time)
 
     def clear_data(self):
         """Clear all stored data"""
