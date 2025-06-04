@@ -1,0 +1,549 @@
+""" The following try statements are used to import the necessary libraries for GPIO control and LED/button management.
+If the libraries are not found, mock objects are used to simulate their behavior for testing purposes.
+This allows the code to run without actual hardware, making it easier to test the state machine logic."""
+
+"""
+Features Implemented:
+- State machine with multiple states (IDLE, PRECHECK_DINAMIC, PRECHECK_STATIC, RUNNING, COMPLETED, ERROR)
+- State transitions with entry and exit actions
+- LED control based on state
+- Button input handling for state transitions
+- Dinamic and static modes for running tests
+- Error handling with error messages
+- Threading for LED control to run concurrently with state machine logic
+
+
+
+"""
+try:
+    import RPi.GPIO as GPIO
+except ModuleNotFoundError:
+    from unittest import mock
+    GPIO = mock.MagicMock()
+import time
+try:
+    import gpiozero
+except ModuleNotFoundError:
+    from unittest import mock
+    gpiozero = mock.MagicMock()
+from time import sleep
+try:
+    from gpiozero import Button
+except (ModuleNotFoundError, ImportError):
+    from unittest.mock import MagicMock
+    Button = MagicMock()
+try:
+    from gpiozero import LED
+except (ModuleNotFoundError, ImportError):
+    from unittest.mock import MagicMock
+    LED = MagicMock()
+import board
+import busio
+from adafruit_mcp9600 import MCP960
+import threading
+
+
+# Set up GPIO mode
+GPIO.setmode(GPIO.BCM)
+
+# Pins for switch
+
+INPUT_PIN_1 = 17  # Change to your first GPIO pin
+INPUT_PIN_2 = 18  # Change to your second GPIO pin
+
+# Set up the pins as inputs with pull-down resistors
+GPIO.setup(INPUT_PIN_1, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
+GPIO.setup(INPUT_PIN_2, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
+
+#Pins for leds
+
+LED1 = LED(24) # PRECHECK Led
+LED2 = LED(25) # RUNNING STATIC Led
+LED3 = LED(20)  # RUNNING DINAMIC Led
+LED4 = LED(21)  # ERRROR Led
+
+#PINS for switch
+button = Button(26)
+
+class ThermocoupleLogger:
+    def __init__(self):
+        """Initialize the data logger with default settings"""
+        # Hardware Configuration
+        self.I2C_SDA_PIN = board.SDA  # Default I2C1 SDA
+        self.I2C_SCL_PIN = board.SCL  # Default I2C1 SCL
+        self.THERMOCOUPLE_ADDRS = [ 0x67]  # MCP9600 defaults
+        
+        # Data Storage
+        self.rec_temp = [[] for _ in range(1)]  # Temperature readings
+        self.rec_time = [[] for _ in range(1)]  # Timestamps
+        
+        # System State
+        self.recording = False
+        self.thermocouples = []
+        self.i2c = None
+
+    def initialize_hardware(self):
+        """
+        Initialize I2C communication and thermocouple sensors
+        Returns: True if at least one sensor initialized successfully
+        """
+        try:
+            # Initialize I2C bus
+            self.i2c = busio.I2C(scl=self.I2C_SCL_PIN, sda=self.I2C_SDA_PIN, frequency=100000)
+            
+            # Initialize thermocouples
+            self.thermocouples = []
+            for addr in self.THERMOCOUPLE_ADDRS:
+                try:
+                    tc = MCP9600(self.i2c, address=addr)
+                    self.thermocouples.append(tc)
+                    print(f"Initialized thermocouple at 0x{addr:02X}")
+                except (ValueError, OSError):
+                    self.thermocouples.append(None)
+                    print(f"Failed to initialize thermocouple at 0x{addr:02X}")
+            
+            return any(tc is not None for tc in self.thermocouples)
+            
+        except Exception as e:
+            print(f"Hardware initialization failed: {e}")
+            return False
+
+    def collect_data(self, duration_sec=0, max_samples=0):
+        """
+        Collect data from all active thermocouples
+        Args:
+            duration_sec: Recording duration in seconds (0=continuous)
+            max_samples: Maximum samples to collect (0=unlimited)
+        """
+        if not self.thermocouples:
+            print("No thermocouples initialized!")
+            return
+            
+        self.recording = True
+        start_time = time.monotonic()
+        sample_count = 0
+        
+        print("Starting data collection...")
+        
+        try:
+            while self.recording:
+                # Check duration/sample limits
+                current_time = time.monotonic()
+                if (duration_sec > 0 and (current_time - start_time) >= duration_sec):
+                    break
+                if (max_samples > 0 and sample_count >= max_samples):
+                    break
+                
+                # Take synchronized readings
+                timestamp = time.monotonic()
+                readings = []
+                for i, tc in enumerate(self.thermocouples):
+                    if tc:
+                        try:
+                            temp = tc.temperature
+                            self.rec_temp[i].append(temp)
+                            self.rec_time[i].append(timestamp)
+                        except OSError:
+                            temp = None
+                            self.rec_temp[i].append(None)
+                            self.rec_time[i].append(timestamp)
+                    else:
+                        temp = None
+                        self.rec_temp[i].append(None)
+                        self.rec_time[i].append(timestamp)
+                    readings.append((temp, timestamp))
+                
+                #Print readings every 0.5 seconds
+                for idx, (temp, t) in enumerate(readings):
+                    print(f"TH{idx+1} = ({temp} Cº , {t} s)", end='  ')
+                print() 
+
+                sample_count += 1
+                time.sleep(0.5)  # 2Hz sampling rate AKA printing every 0.5 seconds
+                
+        except KeyboardInterrupt:
+            print("Data collection interrupted!")
+        finally:
+            self.recording = False
+            print(f"Collection complete. Stored {sample_count} samples per sensor.")
+
+    def get_data(self):
+        """Return recorded data as (temperatures, timestamps) tuple"""
+        return (self.rec_temp , self.rec_time)
+
+    def clear_data(self):
+        """Clear all stored data"""
+        self.rec_temp = [[] for _ in range(4)]
+        self.rec_time = [[] for _ in range(4)]
+
+logger = ThermocoupleLogger()
+
+def ledscpt(): 
+    global runmode
+    while True:
+        if KVEBench.current_state  == State.IDLE:    # IDLE State LED Script, It just makes all LED ON
+                LED1.on() #PRECHECK LED
+                LED2.on() #RUNNING STATIC LED
+                LED3.on() #RUNNING DINAMIC LED
+                LED4.on()   #ERROR LED
+                while State.IDLE == True:
+
+                    print("LEDs are ON in IDLE state")  
+                    sleep(1)
+                
+                
+
+
+        if KVEBench.current_state  == State.PRECHECK_DINAMIC or KVEBench.current_state == State.PRECHECK_STATIC: # PRECHECK State LED Script, It just makes LED2 blink
+            
+            print("All LEDS ARE OFF")
+            #Turn off all LEDs before starting the PRECHECK state
+            LED1.off() #PRECHECK LED
+            LED2.off() #RUNNING STATIC LED
+            LED3.off() #RUNNING DINAMIC LED
+            LED4.off()   #ERROR LED
+            
+
+
+            while KVEBench.current_state  == State.PRECHECK_DINAMIC or KVEBench.current_state == State.PRECHECK_STATIC: # It will blink LED2 it will also set a variable that will decide what LED 
+                                                                                    # set if the next LED is blue or white for the static or dynamic running mode
+                            
+                LED1.off()
+                time.sleep(0.2)
+                LED1.on()
+                time.sleep(0.2)  
+                
+                print("LEDs are ON in PRECHECK state")  
+                
+        if KVEBench.current_state  == State.RUNNING and runmode == True: # RUNNING State LED Script, It just makes LED2 Blink during static test
+            while KVEBench.current_state == State.RUNNING:
+
+                LED2.off()
+                time.sleep(0.2)
+                LED2.on()
+                time.sleep(0.2)  
+        if KVEBench.current_state  == State.RUNNING and runmode == False: # RUNNING State LED Script, It just makes LED3 Blink during dynamic test 
+            while KVEBench.current_state == State.RUNNING:
+
+                LED3.off()
+                time.sleep(0.2)
+                LED3.on()           
+                time.sleep(0.2)
+
+        if KVEBench.current_state  == State.COMPLETED: # COMPLETED State LED Script, It just makes LED1 ON
+            while KVEBench.current_state == State.COMPLETED:
+                if KVEBench.current_state  == State.COMPLETED and runmode == True: # COMPLETED State LED Script, It just makes LED2 on during static test
+                    while KVEBench.current_state == State.COMPLETED:
+
+                        LED2.on()
+
+                if KVEBench.current_state  == State.COMPLETED and runmode == False: # COMPLETED State LED Script, It just makes LED3 on after dynamic test 
+                    while KVEBench.current_state == State.COMPLETED:
+
+                        LED3.on()
+        if KVEBench.current_state == State.ERROR: # ERROR State LED Script, It just makes LED4 blink
+            while KVEBench.current_state == State.ERROR:
+                LED4.on()
+                time.sleep(0.2)
+                LED4.off()
+                time.sleep(0.2)
+                print("LEDs are ON in ERROR state")
+
+class State:
+    """
+    Enumeration of possible states for the calibration bench.
+    """
+    IDLE = "IDLE"
+    PRECHECK_DINAMIC = "PRECHECK"
+    PRECHECK_STATIC = "PRECHECK_STATIC"
+    RUNNING = "RUNNING"
+    COMPLETED = "COMPLETED"
+    ERROR = "ERROR"
+
+
+class StateMachine:
+    """
+    State machine implementation for the Inductive Coil Calibration Bench.
+    
+    This class manages state transitions and associated actions for the
+    calibration bench system.
+    """
+    
+    def __init__(self):
+        """
+        Initialize the state machine in IDLE state.
+        """
+        self.current_state = None
+        self.previous_state = None
+        self.error_message = None
+        
+        # Define valid state transitions
+        self.valid_transitions = {
+            State.IDLE: [State.PRECHECK_DINAMIC,State.PRECHECK_STATIC, State.ERROR],
+            State.PRECHECK_STATIC: [State.RUNNING, State.IDLE, State.ERROR],
+            State.PRECHECK_DINAMIC: [State.RUNNING, State.IDLE, State.ERROR],
+            State.RUNNING: [State.COMPLETED, State.ERROR, State.IDLE],
+            State.COMPLETED: [State.IDLE, State.ERROR],
+            State.ERROR: [State.IDLE]
+        }
+        
+        # Initialize state entry and exit actions
+        self._setup_state_actions()
+    
+    def _setup_state_actions(self):
+        """
+        Set up actions to be performed on state entry and exit.
+        """
+        # State entry actions
+        self.state_entry_actions = {
+            State.IDLE: self._on_enter_idle,
+            State.PRECHECK_DINAMIC: self._on_enter_precheck_dinamic,
+            State.PRECHECK_STATIC: self._on_enter_precheck_static,
+            State.RUNNING: self._on_enter_running,
+            State.COMPLETED: self._on_enter_completed,
+            State.ERROR: self._on_enter_error
+        }
+        
+        # State exit actions
+        self.state_exit_actions = {
+            State.IDLE: self._on_exit_idle,
+            State.PRECHECK_DINAMIC: self._on_exit_precheck_dinamic,
+            State.PRECHECK_STATIC: self._on_exit_precheck_static,
+            State.RUNNING: self._on_exit_running,
+            State.COMPLETED: self._on_exit_completed,
+            State.ERROR: self._on_exit_error
+        }
+    
+    def transition_to(self, new_state, error_message=None):
+        """
+        Transition to a new state if the transition is valid.
+        
+        Args:
+            new_state (str): The state to transition to
+            error_message (str, optional): Error message if transitioning to ERROR state
+            
+        Returns:
+            bool: True if transition was successful, False otherwise
+        """
+        # Check if transition is valid
+        if new_state not in self.valid_transitions[self.current_state]:
+            print(f"Invalid state transition: {self.current_state} -> {new_state}")
+            return False
+        
+        # Execute exit action for current state
+        self.state_exit_actions[self.current_state]()
+        
+        # Update state
+        self.previous_state = self.current_state
+        self.current_state = new_state
+        
+        # Set error message if transitioning to ERROR state
+        if new_state == State.ERROR:
+            self.error_message = error_message or "Unknown error"
+        
+        # Execute entry action for new state
+        self.state_entry_actions[self.current_state]()
+        
+        print(f"State transition: {self.previous_state} -> {self.current_state}")
+        return True
+    
+    def get_current_state(self):
+        """
+        Get the current state.
+        
+        Returns:
+            str: Current state
+        """
+        return self.current_state
+    
+    def get_error_message(self):
+        """
+        Get the current error message.
+        
+        Returns:
+            str: Current error message or None if not in ERROR state
+        """
+        if self.current_state == State.ERROR:
+            return self.error_message
+        return None
+    
+    """The following methods are the state entry and exit actions for each state.
+    These methods are the ones we are gonna use to control the LEDs.
+    This will save us from having to write the same code over and over again."""
+    
+    # State entry actions
+    def _on_enter_idle(self):
+        #Actions to perform when entering IDLE state.
+        print("Entering IDLE state: System in standby mode")
+        # Turn on all tower lights
+        # Reset error message
+        self.error_message = None
+
+    def _on_enter_precheck_dinamic(self):
+        """Actions to perform when entering PRECHECK state."""
+        print("Entering PRECHECK state: Verifying test conditions")
+        # Start blinking GREEN tower light
+        # Begin temperature control
+        #After precheck is done, transition to RUNNING state
+
+    def _on_enter_precheck_static(self):
+        """Actions to perform when entering PRECHECK state."""
+        print("Entering PRECHECK state: Verifying test conditions")
+        # Start blinking GREEN tower light
+        # Begin temperature control
+        #After precheck is done, transition to RUNNING state            
+        
+    
+    def _on_enter_running(self):
+        """Actions to perform when entering RUNNING state."""
+        print("Entering RUNNING state: Test in progress")
+        # Set GREEN tower light
+        # Start data reading
+        # After test is done, transition to COMPLETED state
+        
+        # After test is done, transition to COMPLETED state
+    
+    def _on_enter_completed(self):
+        """Actions to perform when entering COMPLETED state."""
+        print("Entering COMPLETED state: Test finished successfully")
+        # Set BLUE/WHITE tower light
+        # Finalize data reading
+        # Save data to file
+        # After saving data, transition to IDLE state
+        
+        # After saving data, transition to IDLE state
+    
+    def _on_enter_error(self):
+        """Actions to perform when entering ERROR state."""
+        print(f"Entering ERROR state: {self.error_message}")
+        # Set RED tower light
+        # Log error
+    
+    # State exit actions
+    def _on_exit_idle(self):
+        """Actions to perform when exiting IDLE state."""
+        print("Exiting IDLE state")
+        # Turn off all tower lights
+    
+    def _on_exit_precheck_dinamic(self):
+        """Actions to perform when exiting PRECHECK state."""
+        print("Exiting PRECHECK state")
+        # Stop blinking GREEN tower light
+
+    def _on_exit_precheck_static(self):
+        """Actions to perform when exiting PRECHECK state."""
+        print("Exiting PRECHECK state")
+        # Stop blinking GREEN tower light    
+    def _on_exit_running(self):
+        """Actions to perform when exiting RUNNING state."""
+        print("Exiting RUNNING state")
+        # Turn off GREEN tower light
+    
+    def _on_exit_completed(self):
+        """Actions to perform when exiting COMPLETED state."""
+        print("Exiting COMPLETED state")
+        # Turn off BLUE/WHITE tower light
+    
+    def _on_exit_error(self):
+        """Actions to perform when exiting ERROR state."""
+        print("Exiting ERROR state")
+        # Turn off RED tower light
+    def run(self):
+        global runmode
+        """Main loop for the state machine"""
+        self.current_state = State.IDLE  # Initialize to IDLE state
+        ledthr =threading.Thread(target=ledscpt)
+        ledthr.start()  # Start the LED control thread
+      
+        while True:
+            # Process current state
+            if self.current_state == State.IDLE:
+                # Wait for button press
+
+                modeselect = int(input ("Press 1 for PRECHECK DYNAMIC, 0 for PRECHECK STATIC: ")) #this decides if later the dinamic or static led are turned on we will change it with the switch later on.
+                if modeselect == 0:
+                    runmode = True
+                if modeselect == 1:
+                    runmode = False  
+                print(runmode)
+                for i in range(6):
+                    print ("on idle")
+                    time.sleep(0.5)           
+                if runmode == True:
+                    self.transition_to(State.PRECHECK_STATIC)         
+                elif runmode == False:
+                    self.transition_to(State.PRECHECK_DINAMIC)
+   
+            elif self.current_state == State.PRECHECK_DINAMIC:
+                for i in range(8):
+                    print ("on PRECHECK D")
+                    time.sleep(0.5)
+                self.transition_to(State.RUNNING)
+
+            elif self.current_state == State.PRECHECK_STATIC:
+                for i in range(8):
+                    print ("on PRECHECK S")
+                    time.sleep(0.5)
+                self.transition_to(State.RUNNING)
+
+            elif self.current_state == State.RUNNING:
+                logger = ThermocoupleLogger()
+                if logger.initialize_hardware():
+                        # Collect data for 10 seconds or max 100 samples
+                        logger.collect_data(duration_sec=10, max_samples=100)
+                        
+                        # Access data for analysis
+                        temperatures, timestamps = logger.get_data()
+                        print("First thermocouple data:")
+                        for temp, t in zip(temperatures[0], timestamps[0]):
+                            print(f"{temp} Cº, {t} s")
+                        
+                else:
+                        print("Failed to initialize hardware!")                
+                self.transition_to(State.COMPLETED)
+                
+            elif self.current_state == State.COMPLETED:
+                for i in range(8):
+                    print ("on COMPLETED")
+                    time.sleep(0.5)
+                self.transition_to(State.IDLE)    
+
+            elif self.current_state == State.ERROR:
+                # Wait for button press to return to idle
+                time.sleep(0.1)
+                self._on_enter_error
+                
+# Example usage
+
+"""
+Notes:
+
+This manus code is pretty usefull as it lets us just create quite simple state machine.
+Its just that the dofferent states transitions will have to be coded inside the on_enter_<state> functions.
+The state machine is initialized in the IDLE state. The transition_to method is used to change states.
+Except for the IDLE state, all other states have entry and exit actions defined. Meaning only in IDLE should input from the user be accepted.
+The state machine is designed to handle transitions between states and perform actions based on the current state. 
+
+As such the idle state should operate from a while loop that checks for input from the user.
+Such as:
+
+    def _on_enter_idle(self):
+       Actions to perform when entering IDLE state.
+        print("Entering IDLE state: System in standby mode")
+        # Turn on all tower lights
+        # Reset error message
+        self.error_message = None
+        while True:
+            print("Waiting for input...")
+            user_input = input("Please enter a value: ")
+                If user_input == 1:
+                    transition_to(State.PRECHECK_DINAMIC)
+                elif user_input == -1:
+                    transition_to(State.PRECHECK_STATIC)
+         TempControl()
+        # This would be the loop for idle were it checks for input from the user and then runs temp control
+"""
+
+
+KVEBench = StateMachine()
+KVEBench.run()  # Start the state machine
