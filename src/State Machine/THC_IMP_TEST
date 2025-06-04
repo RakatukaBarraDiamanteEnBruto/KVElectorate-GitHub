@@ -458,6 +458,7 @@ class StateMachine:
         ledthr.start()  # Start the LED control thread
       
         while True:
+            runmode = True  # Default to static mode, can be changed by user input
             # Process current state
             if self.current_state == State.IDLE:
                 # Wait for button press
