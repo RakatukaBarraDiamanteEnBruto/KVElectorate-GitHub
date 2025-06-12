@@ -9,7 +9,7 @@ class ThermocoupleLogger:
         # Hardware Configuration
         self.I2C_BUSES = {
             1: {'sda': board.SDA, 'scl': board.SCL},  # Default I2C1
-            3: {'sda': board.GP4, 'scl': board.GP5}    # I2C3 pins (adjust as needed)
+            3: {'sda': board.GPIO4, 'scl': board.GPIO5}    # I2C3 pins (adjust as needed)
         }
         self.THERMOCOUPLE_ADDRS = [0x67, 0x60, 0x66]  # MCP9600 defaults
         
