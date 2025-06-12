@@ -19,11 +19,11 @@ class ThermocoupleLogger:
         # Hardware Configuration
         self.I2C_SDA_PIN = board.SDA  # Default I2C1 SDA
         self.I2C_SCL_PIN = board.SCL  # Default I2C1 SCL
-        self.THERMOCOUPLE_ADDRS = [ 0x67]  # MCP9600 defaults
+        self.THERMOCOUPLE_ADDRS = [ 0x67,0x60, 0x49]  # MCP9600 defaults
         
         # Data Storage
-        self.rec_temp = [[] for _ in range(1)]  # Temperature readings
-        self.rec_time = [[] for _ in range(1)]  # Timestamps
+        self.rec_temp = [[] for _ in range(3)]  # Temperature readings
+        self.rec_time = [[] for _ in range(3)]  # Timestamps
         
         # System State
         self.recording = False
@@ -137,6 +137,7 @@ if __name__ == "__main__":
         print("First thermocouple data:")
         for temp, t in zip(temperatures[0], timestamps[0]):
             print(f"{temp} Cº, {t} s")
+        
     else:
         print("Failed to initialize hardware!")
 logger.get_data
