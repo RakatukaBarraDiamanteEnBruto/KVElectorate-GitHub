@@ -222,13 +222,6 @@ class MultiplexedThermocoupleLogger:
         self.rec_temp = [[] for _ in range(num_sensors)]
         self.rec_time = [[] for _ in range(num_sensors)]
 
-logger = MultiplexedThermocoupleLogger() # Object that will handle the thermocouples and the multiplexer
-# It already has been named in the code already, got to check if it is working properly
-
-# Add thermocouples through the multiplexer
-logger.add_thermocouple(0, 0x66)  # Channel 0, thermocouple 0x67
-logger.add_thermocouple(1, 0x67)  # Channel 1, thermocouple 0x65
-logger.add_thermocouple(2, 0x67)  # Channel 2, thermocouple 0x60
 
 def ledscpt(): 
     global runmode
@@ -506,7 +499,14 @@ class StateMachine:
         self.current_state = State.IDLE  # Initialize to IDLE state
         ledthr =threading.Thread(target=ledscpt)
         ledthr.start()  # Start the LED control thread
-        logger = ThermocoupleLogger()
+        logger = MultiplexedThermocoupleLogger() # Object that will handle the thermocouples and the multiplexer
+        # It already has been named in the code already, got to check if it is working properly
+
+        # Add thermocouples through the multiplexer
+        logger.add_thermocouple(0, 0x66)  # Channel 0, thermocouple 0x67
+        logger.add_thermocouple(1, 0x67)  # Channel 1, thermocouple 0x65
+        logger.add_thermocouple(2, 0x67)  # Channel 2, thermocouple 0x60
+
 
         while True:
             runmode = True  # Default to static mode, can be changed by user input
