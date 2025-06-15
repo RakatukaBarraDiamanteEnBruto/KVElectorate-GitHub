@@ -117,10 +117,10 @@ class MultiplexedThermocoupleLogger:
                     if tc is not None:
                         try:
                             # Select the appropriate channel on the multiplexer
-                            with self.mux[channel]:
-                                temp = tc.temperature
-                                self.rec_temp[i].append(temp)
-                                self.rec_time[i].append(timestamp)
+                            channel_obj = self.mux[channel]
+                            temp = tc.temperature
+                            self.rec_temp[i].append(temp)
+                            self.rec_time[i].append(timestamp)
                         except OSError as e:
                             temp = None
                             self.rec_temp[i].append(None)
@@ -173,3 +173,4 @@ else:
         
 
 
+with 
