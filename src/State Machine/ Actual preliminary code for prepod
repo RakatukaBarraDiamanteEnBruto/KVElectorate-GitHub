@@ -11,8 +11,14 @@ Features Implemented:
 - Dinamic and static modes for running tests
 - Error handling with error messages
 - Threading for LED control to run concurrently with state machine logic
+- Multiplexed thermocouple support using TCA9548A multiplexer
 
-
+Missing Features:
+- Data logging to a file or database
+- Button interruption handling for immediate test shutdown
+- Button led control for visual feedback
+-Flow vortex sensor integration
+-
 
 """
 try:
@@ -37,28 +43,191 @@ try:
 except (ModuleNotFoundError, ImportError):
     from unittest.mock import MagicMock
     LED = MagicMock()
+import board
+import busio
+
+from adafruit_mcp9600 import MCP9600
+import adafruit_tca9548a
+import threading
+
 
 # Set up GPIO mode
 GPIO.setmode(GPIO.BCM)
 
 # Pins for switch
 
-INPUT_PIN_1 = 17  # Change to your first GPIO pin
-INPUT_PIN_2 = 18  # Change to your second GPIO pin
+SWITCH_PIN_1 = 23  # Change to your first GPIO pin
+SWITCH_PIN_2 = 25  # Change to your second GPIO pin
 
 # Set up the pins as inputs with pull-down resistors
-GPIO.setup(INPUT_PIN_1, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
-GPIO.setup(INPUT_PIN_2, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
+GPIO.setup(SWITCH_PIN_1, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
+GPIO.setup(SWITCH_PIN_2, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
 
+state1 = GPIO.input(SWITCH_PIN_1) #Change to dinamic and static later
+state2 = GPIO.input(SWITCH_PIN_2)
 #Pins for leds
 
 LED1 = LED(24) # PRECHECK Led
-LED2 = LED(25) # RUNNING STATIC Led
+LED2 = LED(17) # RUNNING STATIC Led
 LED3 = LED(20)  # RUNNING DINAMIC Led
 LED4 = LED(21)  # ERRROR Led
 
 #PINS for switch
-button = Button(26)
+button = Button(18)
+
+class MultiplexedThermocoupleLogger:
+    def __init__(self, mux_address=0x70):
+        """Initialize the data logger with exclusive multiplexer support
+        
+        Args:
+            mux_address: I2C address of the multiplexer (default 0x70)
+        """
+        # Hardware Configuration
+        self.I2C_SDA_PIN = board.SDA  # Default I2C1 SDA
+        self.I2C_SCL_PIN = board.SCL  # Default I2C1 SCL
+        self.MUX_ADDRESS = mux_address  # I2C address of the multiplexer
+        
+        # Thermocouple configuration - list of tuples (channel, thermocouple_address)
+        self.THERMOCOUPLE_CONFIG = []
+        
+        # Data Storage
+        self.rec_temp = []  # Temperature readings
+        self.rec_time = []  # Timestamps
+        
+        # System State
+        self.recording = False
+        self.thermocouples = []  # List of (channel, sensor) tuples
+        self.i2c = None
+        self.mux = None  # The multiplexer instance
+
+    def add_thermocouple(self, channel, thermo_address):
+        """
+        Add a thermocouple configuration through the multiplexer
+        
+        Args:
+            channel: Multiplexer channel number (0-7)
+            thermo_address: Address of the MCP9600 on that channel
+        """
+        if channel < 0 or channel > 7:
+            raise ValueError("Channel must be between 0 and 7")
+        self.THERMOCOUPLE_CONFIG.append((channel, thermo_address))
+        
+    def initialize_hardware(self):
+        """
+        Initialize I2C communication, multiplexer, and thermocouple sensors
+        Returns: True if at least one sensor initialized successfully
+        """
+        try:
+            # Initialize I2C bus
+            self.i2c = busio.I2C(scl=self.I2C_SCL_PIN, sda=self.I2C_SDA_PIN, frequency=100000)
+            
+            # Initialize data storage based on config
+            num_sensors = len(self.THERMOCOUPLE_CONFIG)
+            self.rec_temp = [[] for _ in range(num_sensors)]
+            self.rec_time = [[] for _ in range(num_sensors)]
+            
+            # Initialize multiplexer
+            self.mux = adafruit_tca9548a.TCA9548A(self.i2c, address=self.MUX_ADDRESS)
+            print(f"Initialized multiplexer at 0x{self.MUX_ADDRESS:02X}")
+            
+            # Initialize thermocouples
+            self.thermocouples = []
+            success_count = 0
+            
+            for channel, thermo_addr in self.THERMOCOUPLE_CONFIG:
+                try:
+                    # Get the channel from the multiplexer
+                    mux_channel = self.mux[channel]
+                    
+                    # Initialize the thermocouple
+                    tc = MCP9600(mux_channel, address=thermo_addr)
+                    self.thermocouples.append((channel, tc))
+                    success_count += 1
+                    print(f"Initialized thermocouple at 0x{thermo_addr:02X} on channel {channel}")
+                except (ValueError, OSError) as e:
+                    self.thermocouples.append((channel, None))
+                    print(f"Failed to initialize thermocouple at 0x{thermo_addr:02X} on channel {channel}: {e}")
+            
+            return success_count > 0
+            
+        except Exception as e:
+            print(f"Hardware initialization failed: {e}")
+            return False
+
+    def collect_data(self, duration_sec=0, max_samples=0):
+        """
+        Collect data from all active thermocouples through the multiplexer
+        Args:
+            duration_sec: Recording duration in seconds (0=continuous)
+            max_samples: Maximum samples to collect (0=unlimited)
+        """
+        if not self.thermocouples:
+            print("No thermocouples initialized!")
+            return
+            
+        self.recording = True
+        start_time = time.monotonic()
+        sample_count = 0
+        
+        print("Starting data collection...")
+        
+        try:
+            while self.recording:
+                # Check duration/sample limits
+                current_time = time.monotonic()
+                if (duration_sec > 0 and (current_time - start_time) >= duration_sec):
+                    break
+                if (max_samples > 0 and sample_count >= max_samples):
+                    break
+                
+                # Take synchronized readings
+                timestamp = time.monotonic()
+                readings = []
+                
+                for i, (channel, tc) in enumerate(self.thermocouples):
+                    if tc is not None:
+                        try:
+                            # Select the appropriate channel on the multiplexer
+                            channel_obj = self.mux[channel]
+                            temp = tc.temperature
+                            self.rec_temp[i].append(temp)
+                            self.rec_time[i].append(timestamp)
+                        except OSError as e:
+                            temp = None
+                            self.rec_temp[i].append(None)
+                            self.rec_time[i].append(timestamp)
+                            print(f"Error reading thermocouple on channel {channel}: {e}")
+                    else:
+                        temp = None
+                        self.rec_temp[i].append(None)
+                        self.rec_time[i].append(timestamp)
+                    readings.append((temp, timestamp))
+                
+                # Print readings every 0.5 seconds
+                for idx, (temp, t) in enumerate(readings):
+                    channel, _ = self.THERMOCOUPLE_CONFIG[idx]
+                    print(f"CH{channel} = {temp} Cº @ {t:.1f}s", end='  ')
+                print() 
+
+                sample_count += 1
+                time.sleep(0.5)  # 2Hz sampling rate
+                
+        except KeyboardInterrupt:
+            print("Data collection interrupted!")
+        finally:
+            self.recording = False
+            print(f"Collection complete. Stored {sample_count} samples per sensor.")
+
+    def get_data(self):
+        """Return recorded data as (temperatures, timestamps) tuple"""
+        return (self.rec_temp, self.rec_time)
+
+    def clear_data(self):
+        """Clear all stored data"""
+        num_sensors = len(self.THERMOCOUPLE_CONFIG)
+        self.rec_temp = [[] for _ in range(num_sensors)]
+        self.rec_time = [[] for _ in range(num_sensors)]
+
 
 def ledscpt(): 
     global runmode
@@ -263,14 +432,14 @@ class StateMachine:
 
     def _on_enter_precheck_dinamic(self):
         """Actions to perform when entering PRECHECK state."""
-        print("Entering PRECHECK state: Verifying test conditions")
+        print("Entering PRECHECK DINAMIC state: Verifying test conditions")
         # Start blinking GREEN tower light
         # Begin temperature control
         #After precheck is done, transition to RUNNING state
 
     def _on_enter_precheck_static(self):
         """Actions to perform when entering PRECHECK state."""
-        print("Entering PRECHECK state: Verifying test conditions")
+        print("Entering PRECHECK STATIC state: Verifying test conditions")
         # Start blinking GREEN tower light
         # Begin temperature control
         #After precheck is done, transition to RUNNING state            
@@ -309,12 +478,12 @@ class StateMachine:
     
     def _on_exit_precheck_dinamic(self):
         """Actions to perform when exiting PRECHECK state."""
-        print("Exiting PRECHECK state")
+        print("Exiting PRECHECK DINAMIC state")
         # Stop blinking GREEN tower light
 
     def _on_exit_precheck_static(self):
         """Actions to perform when exiting PRECHECK state."""
-        print("Exiting PRECHECK state")
+        print("Exiting PRECHECK STATIC state")
         # Stop blinking GREEN tower light    
     def _on_exit_running(self):
         """Actions to perform when exiting RUNNING state."""
@@ -336,42 +505,63 @@ class StateMachine:
         self.current_state = State.IDLE  # Initialize to IDLE state
         ledthr =threading.Thread(target=ledscpt)
         ledthr.start()  # Start the LED control thread
-      
+        logger = MultiplexedThermocoupleLogger() # Object that will handle the thermocouples and the multiplexer
+        # It already has been named in the code already, got to check if it is working properly
+
+        # Add thermocouples through the multiplexer
+        logger.add_thermocouple(0, 0x66)  # Channel 0, thermocouple 0x67
+        logger.add_thermocouple(1, 0x67)  # Channel 1, thermocouple 0x65
+        logger.add_thermocouple(2, 0x67)  # Channel 2, thermocouple 0x60
+
+
         while True:
+            runmode = True  # Default to static mode, can be changed by user input
             # Process current state
             if self.current_state == State.IDLE:
                 # Wait for button press
 
-                modeselect = int(input ("Press 1 for PRECHECK DYNAMIC, 0 for PRECHECK STATIC: ")) #this decides if later the dinamic or static led are turned on we will change it with the switch later on.
-                if modeselect == 0:
-                    runmode = True
-                if modeselect == 1:
-                    runmode = False  
-                print(runmode)
-                for i in range(6):
-                    print ("on idle")
-                    time.sleep(0.5)           
-                if runmode == True:
-                    self.transition_to(State.PRECHECK_STATIC)         
-                elif runmode == False:
-                    self.transition_to(State.PRECHECK_DINAMIC)
+                print ("Move to choose PRECHECK DYNAMIC or PRECHECK STATIC: ") #this decides if later the dinamic or static led are turned on we will change it with the switch later on.
+                print("System in IDLE state, waiting for button...")
+                while self.current_state == State.IDLE:
+                    state1 = GPIO.input(SWITCH_PIN_1) #Change to dinamic and static later
+                    state2 = GPIO.input(SWITCH_PIN_2)
+                    if state1 and not state2:
+                        print(f"Static", end='\r')   # First position active
+                    elif state2 and not state1:
+                        print("Dinamic", end='\r')   # Second position active
+                    else:
+                        print("No Mode", end='\r')     # Center position (both inputs low)
+
+                    if state1 and not state2 and True and button.is_pressed:
+                        time.sleep(0.1)  # Debounce delay
+                        self.transition_to(State.PRECHECK_STATIC)  
+                        print(self.current_state)       
+                    if state2 and not state1 and button.is_pressed:
+                        time.sleep(0.1)
+                        self.transition_to(State.PRECHECK_DINAMIC)
+                        print(self.current_state)   
    
             elif self.current_state == State.PRECHECK_DINAMIC:
-                for i in range(8):
-                    print ("on PRECHECK D")
-                    time.sleep(0.5)
+                logger.initialize_hardware()
                 self.transition_to(State.RUNNING)
 
             elif self.current_state == State.PRECHECK_STATIC:
-                for i in range(8):
-                    print ("on PRECHECK S")
-                    time.sleep(0.5)
+                logger.initialize_hardware()
                 self.transition_to(State.RUNNING)
 
             elif self.current_state == State.RUNNING:
-                for i in range(8):
-                    print ("on RUNNING")
-                    time.sleep(0.5)
+
+                # Collect data for 10 seconds or max 100 samples
+                logger.collect_data(duration_sec=10, max_samples=100)
+                
+                # Access data for analysis
+                temperatures, timestamps = logger.get_data()
+                print("First thermocouple data:")
+                for temp, t in zip(temperatures[0], timestamps[0]):
+                    print(f"{temp} Cº, {t} s")
+                        
+                else:
+                        print("Failed to initialize hardware!")                
                 self.transition_to(State.COMPLETED)
                 
             elif self.current_state == State.COMPLETED:
