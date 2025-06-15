@@ -524,7 +524,7 @@ class StateMachine:
             runmode = True  # Default to static mode
             
             if self.current_state == State.IDLE:
-                sleep(0.8)  # Prevent busy-waiting
+                sleep(2)  # Prevent busy-waiting
                 print("System in IDLE state, waiting for mode selection...")
                 while self.current_state == State.IDLE:
                     state1 = GPIO.input(SWITCH_PIN_1)
