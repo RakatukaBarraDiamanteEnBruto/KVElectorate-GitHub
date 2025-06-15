@@ -167,7 +167,7 @@ logger.add_thermocouple(2, 0x67)  # Channel 2, thermocouple 0x60
 logger.initialize_hardware
 if logger.initialize_hardware():
     print("Hardware initialized successfully.")
-    logger.collect_data(duration_sec=10, max_samples=0)  # Collect for 10 seconds
+    logger.collect_data(duration_sec=10, max_samples=100)  # Collect for 10 seconds
 else:
     print("Failed to initialize hardware. Check connections and addresses.")
         
