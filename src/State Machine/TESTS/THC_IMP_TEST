@@ -11,8 +11,14 @@ Features Implemented:
 - Dinamic and static modes for running tests
 - Error handling with error messages
 - Threading for LED control to run concurrently with state machine logic
+- Multiplexed thermocouple support using TCA9548A multiplexer
 
-
+Missing Features:
+- Data logging to a file or database
+- Button interruption handling for immediate test shutdown
+- Button led control for visual feedback
+-Flow vortex sensor integration
+-
 
 """
 try:
