@@ -13,14 +13,16 @@ Features Implemented:
 - Threading for LED control to run concurrently with state machine logic
 - Multiplexed thermocouple support using TCA9548A multiplexer
 - Proper timestamping for temperature readings
+- Button interruption handling for immediate test shutdown
 
 Missing Features:
 - Data logging to a file or database
-- Button interruption handling for immediate test shutdown
 - Button led control for visual feedback
 -Flow vortex sensor integration
--
-
+-Temp Control
+Other stuff:
+- Cleanup the PRECHECK_DINAMIC and PRECHECK_STATIC states because idk wtf they are doing apart for
+ initializing the hardware
 """
 try:
     import RPi.GPIO as GPIO
@@ -75,6 +77,16 @@ LED4 = LED(21)  # ERRROR Led
 
 #PINS for switch
 button = Button(18)
+bLED = LED(16)  # Button LED Gotta check if this pin is free
+
+def button_led():
+    """Thread function to control the button LED"""
+    while True:
+        if not State.IDLE:
+            bLED.on()  # Turn on error LED when button is pressed
+            time.sleep(0.5)
+            bLED.off()
+            time.sleep(0.5)
 
 class MultiplexedThermocoupleLogger:
     def __init__(self, mux_address=0x70):
@@ -497,11 +509,18 @@ class StateMachine:
         print("Exiting ERROR state")
         # Turn off RED tower light
     def run(self):
+
         global runmode
         """Main loop for the state machine"""
         self.current_state = State.IDLE  # Initialize to IDLE state
+        
         ledthr = threading.Thread(target=ledscpt)
+
+        bledthr = threading.Thread(target=button_led)
+        
+        bledthr.start()  # Start the button LED control thread
         ledthr.start()  # Start the LED control thread
+        
         logger = MultiplexedThermocoupleLogger()
         
         # Add thermocouples
