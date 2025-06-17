@@ -661,9 +661,9 @@ class StateMachine:
         logger = MultiplexedThermocoupleLogger()
         
         # Add thermocouples
-        logger.add_thermocouple(0, 0x66)
-        logger.add_thermocouple(1, 0x67)
-        logger.add_thermocouple(2, 0x66)
+        logger.add_thermocouple(0, 0x67)
+        logger.add_thermocouple(1, 0x66)
+        logger.add_thermocouple(2, 0x67)
 
         # Button press handler for interrupts
         def handle_button_press():
