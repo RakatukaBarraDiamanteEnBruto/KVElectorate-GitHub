@@ -34,6 +34,7 @@ GPIO.output(16, GPIO.HIGH)
 i =0
 
 while i != 10:
-    
+    print("HEATF_TEST: Starting test iteration", i)
     i += 1
     sleep(1)
+print("HEATF_TEST: Test completed .")    
