@@ -53,6 +53,35 @@ class MultiplexedThermocoupleLogger:
             raise ValueError("ADS channel must be between 0 and 3")
         self.flow_sensor_config.append((mux_channel, ads_address, ads_channel))
 
+    def _format_timestamp(self, seconds):
+        """Format seconds as HH:MM:SS.mmm
+        
+        Args:
+            seconds: Time in seconds
+        Returns:
+            str: Formatted timestamp string
+        """
+        return str(timedelta(seconds=seconds))[:-3]  # Truncate microseconds
+        
+    def _convert_voltage_to_flow(self, voltage):
+        """Convert voltage reading from flow sensor to flow rate in l/s
+    
+    Args:
+        voltage: Voltage reading from ADS1115
+    Returns:
+        float: Flow rate in liters per second
+    """
+    # You'll need to replace this with your actual conversion formula
+    # This is just an example linear conversion - adjust for your sensor!
+        if voltage is None:
+            return None
+        
+        # Example conversion: 1V = 2.5 l/s with 0V = 0 l/s
+        flow_rate = voltage * 2.5
+        
+        # Add any sensor-specific calibration here
+        return flow_rate
+
     def initialize_hardware_static(self):
         """Initialize both thermocouples and flow sensors through multiplexer"""
         try:
