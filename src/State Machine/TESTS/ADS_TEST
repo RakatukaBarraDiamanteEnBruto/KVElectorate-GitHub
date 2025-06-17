@@ -324,7 +324,7 @@ class MultiplexedThermocoupleLogger:
         self.test_start_time = None
 
 logger = MultiplexedThermocoupleLogger(mux_address=0x70)
-x # Channel 2
+ # Channel 2
 logger.add_flow_sensor(4, 0x48, 0)  # Channel 4
 
 logger.initialize_hardware_static()
