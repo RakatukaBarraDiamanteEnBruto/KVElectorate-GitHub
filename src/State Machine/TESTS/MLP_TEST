@@ -31,19 +31,59 @@ class MultiplexedThermocoupleLogger:
 
     def add_thermocouple(self, channel, thermo_address):
         """
-        Add a thermocouple configuration through the multiplexer
-        
-        Args:
-            channel: Multiplexer channel number (0-7)
-            thermo_address: Address of the MCP9600 on that channel
-        """
-        print(f"Attempting to initialize channel {channel}...")
-        mux_channel = self.mux[channel]
-        print(f"Channel {channel} enabled, now initializing thermocouple...")
+            Add a thermocouple configuration through the multiplexer with I2C verification
+            
+            Args:
+                channel: Multiplexer channel number (0-7)
+                thermo_address: Address of the MCP9600 on that channel (0x60-0x67)
+            
+            Returns:
+                bool: True if device was found and verified, False otherwise
+            
+            Raises:
+                ValueError: If channel or address is invalid
+                RuntimeError: If I2C communication fails
+            """
+        # Validate inputs
         if channel < 0 or channel > 7:
             raise ValueError("Channel must be between 0 and 7")
-        self.THERMOCOUPLE_CONFIG.append((channel, thermo_address))
+        if thermo_address < 0x60 or thermo_address > 0x67:
+            raise ValueError("MCP9600 address must be between 0x60 and 0x67")
+            
+        # Initialize I2C if not already done
+        if not hasattr(self, 'i2c') or self.i2c is None:
+            try:
+                self.i2c = busio.I2C(scl=self.I2C_SCL_PIN, sda=self.I2C_SDA_PIN)
+                if not self.i2c.try_lock():
+                    raise RuntimeError("Could not acquire I2C lock")
+            except Exception as e:
+                raise RuntimeError(f"I2C initialization failed: {e}")
         
+        # Scan the bus to verify device presence
+        try:
+            print(f"Scanning I2C bus for devices...")
+            devices = self.i2c.scan()
+            print(f"Found devices at: {[hex(x) for x in devices]}")
+            
+            if thermo_address not in devices:
+                print(f"Warning: No device found at address 0x{thermo_address:02X}")
+                device_found = False
+            else:
+                print(f"Device found at 0x{thermo_address:02X}")
+                device_found = True
+            
+            # Add to config regardless (might be initialized later)
+            self.THERMOCOUPLE_CONFIG.append((channel, thermo_address))
+            return device_found
+            
+        except Exception as e:
+            raise RuntimeError(f"I2C scan failed: {e}")
+        finally:
+            if hasattr(self, 'i2c') and self.i2c.locked:
+                self.i2c.unlock()
+                    
+
+                
     def initialize_hardware(self):
         """
         Initialize I2C communication, multiplexer, and thermocouple sensors
