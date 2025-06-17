@@ -1,0 +1,321 @@
+try:
+    import RPi.GPIO as GPIO
+except ModuleNotFoundError:
+    from unittest import mock
+    GPIO = mock.MagicMock()
+import time
+try:
+    import gpiozero
+except ModuleNotFoundError:
+    from unittest import mock
+    gpiozero = mock.MagicMock()
+from time import sleep
+try:
+    from gpiozero import Button
+except (ModuleNotFoundError, ImportError):
+    from unittest.mock import MagicMock
+    Button = MagicMock()
+try:
+    from gpiozero import LED
+except (ModuleNotFoundError, ImportError):
+    from unittest.mock import MagicMock
+    LED = MagicMock()
+import board
+import busio
+
+from adafruit_mcp9600 import MCP9600
+import adafruit_tca9548a
+import threading
+from datetime import timedelta
+
+class MultiplexedThermocoupleLogger:
+    def __init__(self, mux_address=0x70):
+        """Initialize the data logger with exclusive multiplexer support
+        
+        Args:
+            mux_address: I2C address of the multiplexer (default 0x70)
+        """
+        # Hardware Configuration
+        self.I2C_SDA_PIN = board.SDA  # Default I2C1 SDA
+        self.I2C_SCL_PIN = board.SCL  # Default I2C1 SCL
+        self.MUX_ADDRESS = mux_address  # I2C address of the multiplexer
+        
+        # Thermocouple configuration - list of tuples (channel, thermocouple_address)
+        self.THERMOCOUPLE_CONFIG = []
+        
+        # Data Storage
+        self.rec_temp = []  # Temperature readings
+        self.rec_time = []  # Timestamps (relative to test start)
+        
+        # System State
+        self.recording = False
+        self.thermocouples = []  # List of (channel, sensor) tuples
+        self.i2c = None
+        self.mux = None  # The multiplexer instance
+        self.test_start_time = None  # Will be set when collection starts
+
+    def _get_elapsed_time(self, current_time):
+        """Calculate time relative to test start"""
+        if self.test_start_time is None:
+            return 0.0
+        return current_time - self.test_start_time
+
+    def _format_timestamp(self, seconds):
+        """Format seconds as HH:MM:SS.mmm"""
+        return str(timedelta(seconds=seconds))[:-3]
+
+    def add_thermocouple(self, channel, thermo_address):
+        """Add a thermocouple configuration through the multiplexer"""
+        if channel < 0 or channel > 7:
+            raise ValueError("Channel must be between 0 and 7")
+        self.THERMOCOUPLE_CONFIG.append((channel, thermo_address))
+        
+    def initialize_hardware(self):
+        """Initialize I2C communication, multiplexer, and thermocouple sensors"""
+        try:
+            # Initialize I2C bus
+            self.i2c = busio.I2C(scl=self.I2C_SCL_PIN, sda=self.I2C_SDA_PIN, frequency=100000)
+            
+            # Initialize data storage based on config
+            num_sensors = len(self.THERMOCOUPLE_CONFIG)
+            self.rec_temp = [[] for _ in range(num_sensors)]
+            self.rec_time = [[] for _ in range(num_sensors)]
+            
+            # Initialize multiplexer
+            self.mux = adafruit_tca9548a.TCA9548A(self.i2c, address=self.MUX_ADDRESS)
+            print(f"Initialized multiplexer at 0x{self.MUX_ADDRESS:02X}")
+            
+            # Initialize thermocouples
+            self.thermocouples = []
+            success_count = 0
+            
+            for channel, thermo_addr in self.THERMOCOUPLE_CONFIG:
+                try:
+                    mux_channel = self.mux[channel]
+                    tc = MCP9600(mux_channel, address=thermo_addr)
+                    self.thermocouples.append((channel, tc))
+                    success_count += 1
+                    print(f"Initialized thermocouple at 0x{thermo_addr:02X} on channel {channel}")
+                except (ValueError, OSError) as e:
+                    self.thermocouples.append((channel, None))
+                    print(f"Failed to initialize thermocouple at 0x{thermo_addr:02X} on channel {channel}: {e}")
+            
+            return success_count > 0
+            
+        except Exception as e:
+            print(f"Hardware initialization failed: {e}")
+            return False
+
+    def collect_data(self, duration_sec=0, max_samples=0):
+        """Collect data from all active thermocouples through the multiplexer"""
+        if not self.thermocouples:
+            print("No thermocouples initialized!")
+            return
+            
+        self.recording = True
+        self.test_start_time = time.monotonic()  # Capture test start time
+        sample_count = 0
+        
+        print(f"Starting data collection at {self._format_timestamp(0)}...")
+        
+        try:
+            while self.recording:
+                current_time = time.monotonic()
+                elapsed = self._get_elapsed_time(current_time)
+                
+                # Check duration/sample limits
+                if (duration_sec > 0 and elapsed >= duration_sec):
+                    break
+                if (max_samples > 0 and sample_count >= max_samples):
+                    break
+                
+                # Take synchronized readings
+                readings = []
+                
+                for i, (channel, tc) in enumerate(self.thermocouples):
+                    if tc is not None:
+                        try:
+                            temp = tc.temperature
+                            self.rec_temp[i].append(temp)
+                            self.rec_time[i].append(elapsed)
+                        except OSError as e:
+                            temp = None
+                            self.rec_temp[i].append(None)
+                            self.rec_time[i].append(elapsed)
+                            print(f"[{self._format_timestamp(elapsed)}] Error reading CH{channel}: {e}")
+                    else:
+                        temp = None
+                        self.rec_temp[i].append(None)
+                        self.rec_time[i].append(elapsed)
+                    readings.append((temp, elapsed))
+                
+                # Print readings every 0.5 seconds
+                print(f"[{self._format_timestamp(elapsed)}] ", end='')
+                for idx, (temp, t) in enumerate(readings):
+                    channel, _ = self.THERMOCOUPLE_CONFIG[idx]
+                    print(f"CH{channel}={temp}°C ", end='')
+                print()
+                
+                sample_count += 1
+                time.sleep(0.5)  # 2Hz sampling rate
+                
+        except KeyboardInterrupt:
+            elapsed = self._get_elapsed_time(time.monotonic())
+            print(f"[{self._format_timestamp(elapsed)}] Data collection interrupted!")
+        finally:
+            self.recording = False
+            elapsed = self._get_elapsed_time(time.monotonic())
+            print(f"[{self._format_timestamp(elapsed)}] Collection complete. Stored {sample_count} samples per sensor.")
+
+    def get_data(self):
+        """Return recorded data as (temperatures, timestamps) tuple"""
+        return (self.rec_temp, self.rec_time)
+
+    def clear_data(self):
+        """Clear all stored data and reset test timer"""
+        num_sensors = len(self.THERMOCOUPLE_CONFIG)
+        self.rec_temp = [[] for _ in range(num_sensors)]
+        self.rec_time = [[] for _ in range(num_sensors)]
+        self.test_start_time = None
+
+logger = MultiplexedThermocoupleLogger()
+
+# Add thermocouples
+logger.add_thermocouple(0, 0x66)
+logger.add_thermocouple(1, 0x67)
+logger.add_thermocouple(2, 0x67)
+logger.initialize_hardware()
+
+class TemperatureController:
+    def __init__(self, thermocouple_logger, fan_pin, heater_pin, heater_fan_pin):
+        """
+        Initialize the temperature controller.
+        
+        Args:
+            thermocouple_logger: Instance of MultiplexedThermocoupleLogger
+            fan_pin: GPIO pin for controlling fans (via optocoupler)
+            heater_pin: GPIO pin for controlling heater (via optocoupler)
+            heater_fan_pin: GPIO pin for controlling heater's integrated fan
+        """
+        self.logger = thermocouple_logger
+        self.fan_pin = fan_pin
+        self.heater_pin = heater_pin
+        self.heater_fan_pin = heater_fan_pin
+        
+        # Setup GPIO pins
+        GPIO.setup(self.fan_pin, GPIO.OUT)
+        GPIO.setup(self.heater_pin, GPIO.OUT)
+        GPIO.setup(self.heater_fan_pin, GPIO.OUT)
+        
+        # Initialize all outputs to off
+        GPIO.output(self.fan_pin, GPIO.LOW)
+        GPIO.output(self.heater_pin, GPIO.LOW)
+        GPIO.output(self.heater_fan_pin, GPIO.LOW)
+        
+        # Temperature thresholds
+        self.desired_min = 25.0  # Default minimum temperature (°C)
+        self.desired_max = 30.0  # Default maximum temperature (°C)
+        self.hysteresis = 1.0    # Hysteresis to prevent rapid switching
+
+    def set_temperature_range(self, min_temp, max_temp, hysteresis=1.0):
+        """Set the desired temperature range and hysteresis"""
+        self.desired_min = min_temp
+        self.desired_max = max_temp
+        self.hysteresis = hysteresis
+        
+    def get_average_temperature(self):
+        """Get the average temperature from all active thermocouples"""
+        temps = []
+        for i, (channel, tc) in enumerate(self.logger.thermocouples):
+            if tc is not None:
+                try:
+                    temp = tc.temperature
+                    if temp is not None:
+                        temps.append(temp)
+                except OSError:
+                    continue
+        return sum(temps)/len(temps) if temps else None
+    
+    def control_temperature(self):
+        """Main temperature control loop following the block diagram logic"""
+        avg_temp = self.get_average_temperature()
+        if avg_temp is None:
+            print("Error: Could not read temperature from any thermocouple")
+            return False
+        
+        # Check if temperature is in desired range
+        if self.desired_min <= avg_temp <= self.desired_max:
+            print(f"Temperature {avg_temp}°C is in desired range")
+            # Turn off both systems
+            self._turn_off_fans()
+            self._turn_off_heater()
+            
+            # Check if stabilized (stays in range for some time)
+            stabilized = self._check_stabilization()
+            if stabilized:
+                return True
+            return False
+        
+        # Temperature is outside desired range
+        elif avg_temp > self.desired_max + self.hysteresis:
+            print(f"Temperature {avg_temp}°C is too high - cooling")
+            self._turn_on_fans()
+            self._turn_off_heater()
+            
+        elif avg_temp < self.desired_min - self.hysteresis:
+            print(f"Temperature {avg_temp}°C is too low - heating")
+            self._turn_off_fans()
+            self._turn_on_heater()
+            
+        return False
+        
+    def _turn_on_fans(self):
+        """Turn on the cooling fans"""
+        GPIO.output(self.fan_pin, GPIO.HIGH)
+        
+    def _turn_off_fans(self):
+        """Turn off the cooling fans"""
+        GPIO.output(self.fan_pin, GPIO.LOW)
+        
+    def _turn_on_heater(self):
+        """Turn on the heater and its integrated fan"""
+        GPIO.output(self.heater_pin, GPIO.HIGH)
+        GPIO.output(self.heater_fan_pin, GPIO.HIGH)
+        
+    def _turn_off_heater(self):
+        """Turn off the heater and its integrated fan"""
+        GPIO.output(self.heater_pin, GPIO.LOW)
+        GPIO.output(self.heater_fan_pin, GPIO.LOW)
+        
+    def _check_stabilization(self, check_duration=5, check_interval=1):
+        """
+        Check if temperature stays in desired range for specified duration
+        
+        Args:
+            check_duration: Total time to monitor (seconds)
+            check_interval: Time between checks (seconds)
+        """
+        start_time = time.time()
+        while time.time() - start_time < check_duration:
+            avg_temp = self.get_average_temperature()
+            if avg_temp is None:
+                return False
+                
+            if not (self.desired_min <= avg_temp <= self.desired_max):
+                return False
+                
+            time.sleep(check_interval)
+            
+        return True
+
+    def cleanup(self):
+        """Clean up resources and ensure all outputs are off"""
+        self._turn_off_fans()
+        self._turn_off_heater()
+
+logtemp = TemperatureController(logger, fan_pin=20, heater_pin=21, heater_fan_pin=16)
+logtemp.set_temperature_range(29.0, 31.0, hysteresis=1.0)
+logger.collect_data(duration_sec=10, max_samples=100)
+while not logtemp.control_temperature() :
+    print("Controlling temperature...")
+    time.sleep(1)
