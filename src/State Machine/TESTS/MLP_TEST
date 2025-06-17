@@ -164,7 +164,12 @@ logger.add_thermocouple(0, 0x67)  # Channel 0, thermocouple 0x67
 logger.add_thermocouple(1, 0x66)  # Channel 1, thermocouple 0x65
 logger.add_thermocouple(2, 0x67)  # Channel 2, thermocouple 0x60
 
+print(f"Attempting to initialize channel {channel}...")
+mux_channel = self.mux[channel]
+print(f"Channel {channel} enabled, now initializing thermocouple...")
+
 logger.initialize_hardware
+
 if logger.initialize_hardware():
     print("Hardware initialized successfully.")
     logger.collect_data(duration_sec=10, max_samples=100)  # Collect for 10 seconds
