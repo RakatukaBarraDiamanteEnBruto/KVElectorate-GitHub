@@ -73,8 +73,7 @@ class MultiplexedThermocoupleLogger:
         """Initialize I2C communication, multiplexer, thermocouple and flow sensors"""
         try:
             # Initialize I2C bus with timeout
-            self.i2c = busio.I2C(scl=self.I2C_SCL_PIN, sda=self.I2C_SDA_PIN, 
-                                frequency=100000, timeout=255)
+            self.i2c = busio.I2C(scl=self.I2C_SCL_PIN, sda=self.I2C_SDA_PIN, frequency=100000)
             
             # Verify I2C bus is locked
             while not self.i2c.try_lock():
