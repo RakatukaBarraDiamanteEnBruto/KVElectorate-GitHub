@@ -74,12 +74,12 @@ state2 = GPIO.input(SWITCH_PIN_2)
 
 LED1 = LED(24) # PRECHECK Led
 LED2 = LED(17) # RUNNING STATIC Led
-LED3 = LED(20)  # RUNNING DINAMIC Led
-LED4 = LED(21)  # ERRROR Led
+LED3 = LED(12)  # RUNNING DINAMIC Led
+LED4 = LED(13)  # ERRROR Led
 
 #PINS for switch
 button = Button(18) # com cable to GPIO 18, NO  to GND
-bLED = LED(16)  # Button LED Gotta check if this pin is free
+bLED = LED(14)  # Button LED Gotta check if this pin is free
 "SCRIPT TOO CONTROL THE BLINKING OF THE BUTTON LED"
 
 def button_led():
