@@ -72,58 +72,107 @@ class MultiplexedThermocoupleLogger:
     def initialize_hardware_static(self):
         """Initialize I2C communication, multiplexer, thermocouple and flow sensors"""
         try:
-            # Initialize I2C bus
-            self.i2c = busio.I2C(scl=self.I2C_SCL_PIN, sda=self.I2C_SDA_PIN, frequency=100000)
+            # Initialize I2C bus with timeout
+            self.i2c = busio.I2C(scl=self.I2C_SCL_PIN, sda=self.I2C_SDA_PIN, 
+                                frequency=100000, timeout=255)
             
-            print(f"Attempting to initialize channel {channel}...")
-            mux_channel = self.mux[channel]
-            print(f"Channel {channel} enabled, now initializing thermocouple...")
-            # Initialize data storage based on config
+            # Verify I2C bus is locked
+            while not self.i2c.try_lock():
+                print("Waiting for I2C lock...")
+                time.sleep(0.1)
+            
+            print("I2C initialized successfully")
+            
+            # Initialize multiplexer with retry
+            try:
+                self.mux = adafruit_tca9548a.TCA9548A(self.i2c, address=self.MUX_ADDRESS)
+                print(f"Multiplexer found at 0x{self.MUX_ADDRESS:02X}")
+            except Exception as mux_error:
+                print(f"Multiplexer init failed: {mux_error}")
+                # Scan for any I2C devices as debug
+                print("Scanning I2C bus:")
+                print([hex(x) for x in self.i2c.scan()])
+                self.i2c.unlock()
+                return False
+            
+            # Initialize data storage
             num_temp_sensors = len(self.THERMOCOUPLE_CONFIG)
             num_flow_sensors = len(self.FLOW_SENSOR_CONFIG)
             self.rec_temp = [[] for _ in range(num_temp_sensors)]
             self.rec_flow = [[] for _ in range(num_flow_sensors)]
             self.rec_time = [[] for _ in range(max(num_temp_sensors, num_flow_sensors))]
             
-            # Initialize multiplexer
-            self.mux = adafruit_tca9548a.TCA9548A(self.i2c, address=self.MUX_ADDRESS)
-            print(f"Initialized multiplexer at 0x{self.MUX_ADDRESS:02X}")
-            
             # Initialize thermocouples
             self.thermocouples = []
             success_count = 0
             
-            for channel, thermo_addr in self.THERMOCOUPLE_CONFIG:
+            for config in self.THERMOCOUPLE_CONFIG:
+                channel, thermo_addr = config  # Unpack the tuple
                 try:
-                    mux_channel = self.mux[channel]
-                    tc = MCP9600(mux_channel, address=thermo_addr)
+                    print(f"\nAttempting channel {channel} (thermo 0x{thermo_addr:02X})...")
+                    
+                    # Verify multiplexer channel
+                    if channel not in range(8):
+                        raise ValueError(f"Invalid channel {channel}")
+                    
+                    # Check if device responds
+                    devices_on_channel = self.mux[channel].scan()
+                    print(f"Devices on channel {channel}: {[hex(x) for x in devices_on_channel]}")
+                    
+                    if thermo_addr not in devices_on_channel:
+                        raise OSError(f"No device at 0x{thermo_addr:02X}")
+                    
+                    # Now initialize
+                    tc = MCP9600(self.mux[channel], address=thermo_addr)
+                    
+                    # Verify communication
+                    _ = tc.temperature  # Test read
+                    
                     self.thermocouples.append((channel, tc))
                     success_count += 1
-                    print(f"Initialized thermocouple at 0x{thermo_addr:02X} on channel {channel}")
-                except (ValueError, OSError) as e:
+                    print(f"Successfully initialized thermocouple at 0x{thermo_addr:02X}")
+                    
+                except Exception as e:
+                    print(f"FAILED channel {channel} (0x{thermo_addr:02X}): {type(e).__name__}: {e}")
                     self.thermocouples.append((channel, None))
-                    print(f"Failed to initialize thermocouple at 0x{thermo_addr:02X} on channel {channel}: {e}")
-            
+                    
             # Initialize flow sensors
             self.flow_sensors = []
             flow_success_count = 0
             
-            for channel, ads_addr, ads_ch in self.FLOW_SENSOR_CONFIG:
+            for config in self.FLOW_SENSOR_CONFIG:
+                channel, ads_addr, ads_ch = config  # Unpack the tuple
                 try:
-                    mux_channel = self.mux[channel]
-                    ads = ADS.ADS1115(mux_channel, address=ads_addr)
-                    # Store the ADS instance and channel number
+                    print(f"\nAttempting channel {channel} (ADS1115 0x{ads_addr:02X})...")
+                    
+                    if channel not in range(8):
+                        raise ValueError(f"Invalid channel {channel}")
+                    
+                    devices_on_channel = self.mux[channel].scan()
+                    print(f"Devices on channel {channel}: {[hex(x) for x in devices_on_channel]}")
+                    
+                    if ads_addr not in devices_on_channel:
+                        raise OSError(f"No device at 0x{ads_addr:02X}")
+                    
+                    ads = ADS.ADS1115(self.mux[channel], address=ads_addr)
+                    # Test read
+                    _ = AnalogIn(ads, getattr(ADS, f'P{ads_ch}')).voltage
+                    
                     self.flow_sensors.append((channel, ads, ads_ch))
                     flow_success_count += 1
-                    print(f"Initialized ADS1115 at 0x{ads_addr:02X} on channel {channel} (ADS channel {ads_ch})")
-                except (ValueError, OSError) as e:
+                    print(f"Successfully initialized ADS1115 at 0x{ads_addr:02X}")
+                    
+                except Exception as e:
+                    print(f"FAILED channel {channel} (0x{ads_addr:02X}): {type(e).__name__}: {e}")
                     self.flow_sensors.append((channel, None, ads_ch))
-                    print(f"Failed to initialize ADS1115 at 0x{ads_addr:02X} on channel {channel}: {e}")
             
+            self.i2c.unlock()
             return (success_count > 0) or (flow_success_count > 0)
             
         except Exception as e:
-            print(f"Hardware initialization failed: {e}")
+            print(f"CRITICAL INIT ERROR: {type(e).__name__}: {e}")
+            if hasattr(self, 'i2c') and self.i2c.locked:
+                self.i2c.unlock()
             return False
 
     def initialize_hardware_dynamic(self):
