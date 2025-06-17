@@ -322,3 +322,12 @@ class MultiplexedThermocoupleLogger:
         self.rec_flow = [[] for _ in range(num_flow_sensors)]
         self.rec_time = [[] for _ in range(max(num_temp_sensors, num_flow_sensors))]
         self.test_start_time = None
+
+logger = MultiplexedThermocoupleLogger(mux_address=0x70)
+logger.add_thermocouple(0, 0x67)  # Channel 0
+logger.add_thermocouple(1, 0x66)  # Channel 1
+logger.add_thermocouple(2, 0x67)  # Channel 2
+logger.add_flow_sensor(4, 0x48, 0)  # Channel 4
+
+logger.initialize_hardware_static()
+logger.collect_data_static(duration_sec=10, max_samples=20)
