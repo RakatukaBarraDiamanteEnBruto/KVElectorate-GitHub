@@ -304,13 +304,15 @@ class TemperatureController:
         while time.time() - start_time < check_duration:
             avg_temp = self.get_average_temperature()
             if avg_temp is None:
+                print("Error: Could not read temperature from any thermocouple")
                 return False
                 
             if not (self.desired_min <= avg_temp <= self.desired_max):
+                print(f"Temperature {avg_temp}°C is out of range during stabilization check")
                 return False
                 
             time.sleep(check_interval)
-            
+            print(f"Stabilization check: {avg_temp}°C in range [{self.desired_min}, {self.desired_max}]")      
         return True
 
     def cleanup(self):
