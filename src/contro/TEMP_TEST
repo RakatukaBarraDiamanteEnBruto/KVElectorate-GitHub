@@ -183,7 +183,7 @@ class MultiplexedThermocoupleLogger:
 logger = MultiplexedThermocoupleLogger()
 
 # Add thermocouples
-logger.add_thermocouple(0, 0x66)
+logger.add_thermocouple(0, 0x67)
 logger.add_thermocouple(1, 0x66)
 logger.add_thermocouple(2, 0x67)
 logger.initialize_hardware()
@@ -316,7 +316,7 @@ class TemperatureController:
         return True
 
     def cleanup(self):
-        """Clean up resources and ensure all outputs are off"""
+        """Clean up resources and ensure all outputs arfe off"""
         self._turn_off_fans()
         self._turn_off_heater()
 
