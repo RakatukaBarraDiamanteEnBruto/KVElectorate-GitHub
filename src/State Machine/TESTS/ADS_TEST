@@ -326,6 +326,8 @@ class MultiplexedThermocoupleLogger:
 logger = MultiplexedThermocoupleLogger(mux_address=0x70)
  # Channel 2
 logger.add_flow_sensor(4, 0x48, 0)  # Channel 4
-
+logger.add_thermocouple(0, 0x67)  # Channel 0
+logger.add_thermocouple(1, 0x66)  # Channel
+logger.add_thermocouple(2, 0x67)  # Channel 2
 logger.initialize_hardware_static()
 logger.collect_data_static(duration_sec=10, max_samples=20)
