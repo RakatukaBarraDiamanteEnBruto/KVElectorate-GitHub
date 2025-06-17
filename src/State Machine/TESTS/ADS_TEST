@@ -75,6 +75,9 @@ class MultiplexedThermocoupleLogger:
             # Initialize I2C bus
             self.i2c = busio.I2C(scl=self.I2C_SCL_PIN, sda=self.I2C_SDA_PIN, frequency=100000)
             
+            print(f"Attempting to initialize channel {channel}...")
+            mux_channel = self.mux[channel]
+            print(f"Channel {channel} enabled, now initializing thermocouple...")
             # Initialize data storage based on config
             num_temp_sensors = len(self.THERMOCOUPLE_CONFIG)
             num_flow_sensors = len(self.FLOW_SENSOR_CONFIG)
