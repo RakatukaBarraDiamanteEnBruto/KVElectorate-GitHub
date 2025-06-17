@@ -37,6 +37,9 @@ class MultiplexedThermocoupleLogger:
             channel: Multiplexer channel number (0-7)
             thermo_address: Address of the MCP9600 on that channel
         """
+        print(f"Attempting to initialize channel {channel}...")
+        mux_channel = self.mux[channel]
+        print(f"Channel {channel} enabled, now initializing thermocouple...")
         if channel < 0 or channel > 7:
             raise ValueError("Channel must be between 0 and 7")
         self.THERMOCOUPLE_CONFIG.append((channel, thermo_address))
@@ -164,9 +167,7 @@ logger.add_thermocouple(0, 0x67)  # Channel 0, thermocouple 0x67
 logger.add_thermocouple(1, 0x66)  # Channel 1, thermocouple 0x65
 logger.add_thermocouple(2, 0x67)  # Channel 2, thermocouple 0x60
 
-print(f"Attempting to initialize channel {channel}...")
-mux_channel = self.mux[channel]
-print(f"Channel {channel} enabled, now initializing thermocouple...")
+
 
 logger.initialize_hardware
 
