@@ -79,7 +79,7 @@ class MultiplexedThermocoupleLogger:
         except Exception as e:
             raise RuntimeError(f"I2C scan failed: {e}")
         finally:
-            if hasattr(self, 'i2c') 
+            if hasattr(self, 'i2c'): 
                 self.i2c.unlock()
                     
 
