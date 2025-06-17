@@ -28,6 +28,8 @@ import adafruit_tca9548a
 import threading
 from datetime import timedelta
 
+GPIO.setmode(GPIO.BCM)  # Use BCM pin numbering
+
 class MultiplexedThermocoupleLogger:
     def __init__(self, mux_address=0x70):
         """Initialize the data logger with exclusive multiplexer support
@@ -182,7 +184,7 @@ logger = MultiplexedThermocoupleLogger()
 
 # Add thermocouples
 logger.add_thermocouple(0, 0x66)
-logger.add_thermocouple(1, 0x67)
+logger.add_thermocouple(1, 0x66)
 logger.add_thermocouple(2, 0x67)
 logger.initialize_hardware()
 
@@ -313,7 +315,7 @@ class TemperatureController:
         self._turn_off_fans()
         self._turn_off_heater()
 
-logtemp = TemperatureController(logger, fan_pin=20, heater_pin=21, heater_fan_pin=16)
+logtemp = TemperatureController(logger, fan_pin=[20], heater_pin=[21], heater_fan_pin=[16])
 logtemp.set_temperature_range(29.0, 31.0, hysteresis=1.0)
 logger.collect_data(duration_sec=10, max_samples=100)
 while not logtemp.control_temperature() :
