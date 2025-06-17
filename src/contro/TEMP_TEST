@@ -320,7 +320,7 @@ class TemperatureController:
 
 logtemp = TemperatureController(logger, fan_pin=[20], heater_pin=[21], heater_fan_pin=[16])
 logtemp.set_temperature_range(29.0, 31.0, hysteresis=1.0)
-logger.collect_data(duration_sec=2 max_samples=100)
+logger.collect_data(duration_sec=2,max_samples=100)
 while not logtemp.control_temperature() :
     print("Controlling temperature...")
     time.sleep(1)
