@@ -31,8 +31,9 @@ from datetime import timedelta
 GPIO.setmode(GPIO.BCM)
 GPIO.setup(16, GPIO.OUT)
 GPIO.output(16, GPIO.HIGH)
+i =0
 
 while i != 10:
-    i =0
+    
     i += 1
     sleep(1)
