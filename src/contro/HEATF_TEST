@@ -1,0 +1,33 @@
+try:
+    import RPi.GPIO as GPIO
+except ModuleNotFoundError:
+    from unittest import mock
+    GPIO = mock.MagicMock()
+import time
+try:
+    import gpiozero
+except ModuleNotFoundError:
+    from unittest import mock
+    gpiozero = mock.MagicMock()
+from time import sleep
+try:
+    from gpiozero import Button
+except (ModuleNotFoundError, ImportError):
+    from unittest.mock import MagicMock
+    Button = MagicMock()
+try:
+    from gpiozero import LED
+except (ModuleNotFoundError, ImportError):
+    from unittest.mock import MagicMock
+    LED = MagicMock()
+import board
+import busio
+
+from adafruit_mcp9600 import MCP9600
+import adafruit_tca9548a
+import threading
+from datetime import timedelta
+
+GPIO.setmode(GPIO.BCM)
+GPIO.setup(16, GPIO.OUT)
+GPIO.output(16, GPIO.HIGH)
