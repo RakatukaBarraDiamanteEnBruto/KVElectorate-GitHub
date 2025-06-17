@@ -16,351 +16,169 @@ from adafruit_ads1x15.analog_in import AnalogIn
 
 class MultiplexedThermocoupleLogger:
     def __init__(self, mux_address=0x70):
-        """Initialize the data logger with exclusive multiplexer support
-        
-        Args:
-            mux_address: I2C address of the multiplexer (default 0x70)
-        """
-        # Hardware Configuration
-        self.I2C_SDA_PIN = board.SDA  # Default I2C1 SDA
-        self.I2C_SCL_PIN = board.SCL  # Default I2C1 SCL
-        self.MUX_ADDRESS = mux_address  # I2C address of the multiplexer
-        
-        # Thermocouple configuration - list of tuples (channel, thermocouple_address)
-        self.THERMOCOUPLE_CONFIG = []
-        
-        # ADS1115 configuration for flow sensors - list of tuples (channel, ads_address, ads_channel)
-        self.FLOW_SENSOR_CONFIG = []
-        
-        # Data Storage
-        self.rec_temp = []  # Temperature readings
-        self.rec_flow = []  # Flow readings (l/s)
-        self.rec_time = []  # Timestamps (relative to test start)
-        
-        # System State
-        self.recording = False
-        self.thermocouples = []  # List of (channel, sensor) tuples
-        self.flow_sensors = []  # List of (channel, ads, ads_channel) tuples
-        self.i2c = None
-        self.mux = None  # The multiplexer instance
-        self.test_start_time = None  # Will be set when collection starts
+            """Initialize the data logger with multiplexer support"""
+            # Hardware Configuration
+            self.I2C_SDA_PIN = board.SDA
+            self.I2C_SCL_PIN = board.SCL
+            self.MUX_ADDRESS = mux_address
+            
+            # Sensor configurations - now storing mux channel with each sensor
+            self.thermocouple_config = []  # List of (mux_channel, sensor_address)
+            self.flow_sensor_config = []   # List of (mux_channel, ads_address, ads_channel)
+            
+            # Data Storage
+            self.rec_temp = []
+            self.rec_flow = []
+            self.rec_time = []
+            
+            # System State
+            self.recording = False
+            self.thermocouples = []  # List of (mux_channel, sensor) tuples
+            self.flow_sensors = []   # List of (mux_channel, ads, ads_channel) tuples
+            self.i2c = None
+            self.mux = None
+            self.test_start_time = None
 
-    def _get_elapsed_time(self, current_time):
-        """Calculate time relative to test start"""
-        if self.test_start_time is None:
-            return 0.0
-        return current_time - self.test_start_time
-
-    def _format_timestamp(self, seconds):
-        """Format seconds as HH:MM:SS.mmm"""
-        return str(timedelta(seconds=seconds))[:-3]
-
-    def add_thermocouple(self, channel, thermo_address):
-        """Add a thermocouple configuration through the multiplexer"""
-        if channel < 0 or channel > 7:
-            raise ValueError("Channel must be between 0 and 7")
-        self.THERMOCOUPLE_CONFIG.append((channel, thermo_address))
+    def add_thermocouple(self, mux_channel, thermo_address):
+        """Add a thermocouple through the specified multiplexer channel"""
+        if mux_channel < 0 or mux_channel > 7:
+            raise ValueError("Multiplexer channel must be between 0 and 7")
+        self.thermocouple_config.append((mux_channel, thermo_address))
         
-    def add_flow_sensor(self, channel, ads_address, ads_channel):
-        """Add a flow sensor configuration through the multiplexer"""
-        if channel < 0 or channel > 7:
-            raise ValueError("Channel must be between 0 and 7")
+    def add_flow_sensor(self, mux_channel, ads_address, ads_channel):
+        """Add a flow sensor through the specified multiplexer channel"""
+        if mux_channel < 0 or mux_channel > 7:
+            raise ValueError("Multiplexer channel must be between 0 and 7")
         if ads_channel < 0 or ads_channel > 3:
             raise ValueError("ADS channel must be between 0 and 3")
-        self.FLOW_SENSOR_CONFIG.append((channel, ads_address, ads_channel))
-        
-    def initialize_hardware_static(self):
-        """Initialize I2C communication, multiplexer, thermocouple and flow sensors"""
-        try:
-            # Initialize I2C bus with timeout
-            self.i2c = busio.I2C(scl=self.I2C_SCL_PIN, sda=self.I2C_SDA_PIN, frequency=100000)
-            
-            # Verify I2C bus is locked
-            while not self.i2c.try_lock():
-                print("Waiting for I2C lock...")
-                time.sleep(0.1)
-            
-            print("I2C initialized successfully")
-            
-            # Initialize multiplexer with retry
-            try:
-                self.mux = adafruit_tca9548a.TCA9548A(self.i2c, address=self.MUX_ADDRESS)
-                print(f"Multiplexer found at 0x{self.MUX_ADDRESS:02X}")
-            except Exception as mux_error:
-                print(f"Multiplexer init failed: {mux_error}")
-                # Scan for any I2C devices as debug
-                print("Scanning I2C bus:")
-                print([hex(x) for x in self.i2c.scan()])
-                self.i2c.unlock()
-                return False
-            
-            # Initialize data storage
-            num_temp_sensors = len(self.THERMOCOUPLE_CONFIG)
-            num_flow_sensors = len(self.FLOW_SENSOR_CONFIG)
-            self.rec_temp = [[] for _ in range(num_temp_sensors)]
-            self.rec_flow = [[] for _ in range(num_flow_sensors)]
-            self.rec_time = [[] for _ in range(max(num_temp_sensors, num_flow_sensors))]
-            
-            # Initialize thermocouples
-            self.thermocouples = []
-            success_count = 0
-            
-            for config in self.THERMOCOUPLE_CONFIG:
-                channel, thermo_addr = config  # Unpack the tuple
-                try:
-                    print(f"\nAttempting channel {channel} (thermo 0x{thermo_addr:02X})...")
-                    
-                    # Verify multiplexer channel
-                    if channel not in range(8):
-                        raise ValueError(f"Invalid channel {channel}")
-                    
-                    # Check if device responds
-                    devices_on_channel = self.mux[channel].scan()
-                    print(f"Devices on channel {channel}: {[hex(x) for x in devices_on_channel]}")
-                    
-                    if thermo_addr not in devices_on_channel:
-                        raise OSError(f"No device at 0x{thermo_addr:02X}")
-                    
-                    # Now initialize
-                    tc = MCP9600(self.mux[channel], address=thermo_addr)
-                    
-                    # Verify communication
-                    _ = tc.temperature  # Test read
-                    
-                    self.thermocouples.append((channel, tc))
-                    success_count += 1
-                    print(f"Successfully initialized thermocouple at 0x{thermo_addr:02X}")
-                    
-                except Exception as e:
-                    print(f"FAILED channel {channel} (0x{thermo_addr:02X}): {type(e).__name__}: {e}")
-                    self.thermocouples.append((channel, None))
-                    
-            # Initialize flow sensors
-            self.flow_sensors = []
-            flow_success_count = 0
-            
-            for config in self.FLOW_SENSOR_CONFIG:
-                channel, ads_addr, ads_ch = config  # Unpack the tuple
-                try:
-                    print(f"\nAttempting channel {channel} (ADS1115 0x{ads_addr:02X})...")
-                    
-                    if channel not in range(8):
-                        raise ValueError(f"Invalid channel {channel}")
-                    
-                    devices_on_channel = self.mux[channel].scan()
-                    print(f"Devices on channel {channel}: {[hex(x) for x in devices_on_channel]}")
-                    
-                    if ads_addr not in devices_on_channel:
-                        raise OSError(f"No device at 0x{ads_addr:02X}")
-                    
-                    ads = ADS.ADS1115(self.mux[channel], address=ads_addr)
-                    # Test read
-                    _ = AnalogIn(ads, getattr(ADS, f'P{ads_ch}')).voltage
-                    
-                    self.flow_sensors.append((channel, ads, ads_ch))
-                    flow_success_count += 1
-                    print(f"Successfully initialized ADS1115 at 0x{ads_addr:02X}")
-                    
-                except Exception as e:
-                    print(f"FAILED channel {channel} (0x{ads_addr:02X}): {type(e).__name__}: {e}")
-                    self.flow_sensors.append((channel, None, ads_ch))
-            
-            self.i2c.unlock()
-            return (success_count > 0) or (flow_success_count > 0)
-            
-        except Exception as e:
-            print(f"CRITICAL INIT ERROR: {type(e).__name__}: {e}")
-            if hasattr(self, 'i2c') and self.i2c.locked:
-                self.i2c.unlock()
-            return False
+        self.flow_sensor_config.append((mux_channel, ads_address, ads_channel))
 
-    def initialize_hardware_dynamic(self):
-        """Initialize I2C communication, multiplexer, and thermocouple sensors only"""
+    def initialize_hardware_static(self):
+        """Initialize both thermocouples and flow sensors through multiplexer"""
         try:
             # Initialize I2C bus
-            self.i2c = busio.I2C(scl=self.I2C_SCL_PIN, sda=self.I2C_SDA_PIN, frequency=100000)
-            
-            # Initialize data storage based on config
-            num_sensors = len(self.THERMOCOUPLE_CONFIG)
-            self.rec_temp = [[] for _ in range(num_sensors)]
-            self.rec_time = [[] for _ in range(num_sensors)]
+            self.i2c = busio.I2C(self.I2C_SCL_PIN, self.I2C_SDA_PIN)
             
             # Initialize multiplexer
             self.mux = adafruit_tca9548a.TCA9548A(self.i2c, address=self.MUX_ADDRESS)
-            print(f"Initialized multiplexer at 0x{self.MUX_ADDRESS:02X}")
+            print(f"Multiplexer initialized at 0x{self.MUX_ADDRESS:02X}")
             
-            # Initialize thermocouples
+            # Initialize data storage
+            self.rec_temp = [[] for _ in range(len(self.thermocouple_config))]
+            self.rec_flow = [[] for _ in range(len(self.flow_sensor_config))]
+            self.rec_time = [[] for _ in range(max(len(self.thermocouple_config), len(self.flow_sensor_config)))]
+            
+            # Initialize thermocouples through their mux channels
             self.thermocouples = []
-            success_count = 0
-            
-            for channel, thermo_addr in self.THERMOCOUPLE_CONFIG:
+            for idx, (mux_ch, addr) in enumerate(self.thermocouple_config):
                 try:
-                    mux_channel = self.mux[channel]
-                    tc = MCP9600(mux_channel, address=thermo_addr)
-                    self.thermocouples.append((channel, tc))
-                    success_count += 1
-                    print(f"Initialized thermocouple at 0x{thermo_addr:02X} on channel {channel}")
-                except (ValueError, OSError) as e:
-                    self.thermocouples.append((channel, None))
-                    print(f"Failed to initialize thermocouple at 0x{thermo_addr:02X} on channel {channel}: {e}")
+                    # Get the mux channel first
+                    channel = self.mux[mux_ch]
+                    # Then initialize sensor through that channel
+                    tc = MCP9600(channel, address=addr)
+                    self.thermocouples.append((mux_ch, tc))
+                    print(f"Thermocouple {idx}: Mux CH{mux_ch}, Addr 0x{addr:02X} - OK")
+                except Exception as e:
+                    self.thermocouples.append((mux_ch, None))
+                    print(f"Thermocouple {idx}: Mux CH{mux_ch}, Addr 0x{addr:02X} - Failed: {e}")
             
-            return success_count > 0
+            # Initialize flow sensors through their mux channels
+            self.flow_sensors = []
+            for idx, (mux_ch, addr, ads_ch) in enumerate(self.flow_sensor_config):
+                try:
+                    # Get the mux channel first
+                    channel = self.mux[mux_ch]
+                    # Then initialize ADS through that channel
+                    ads = ADS.ADS1115(channel, address=addr)
+                    self.flow_sensors.append((mux_ch, ads, ads_ch))
+                    print(f"Flow Sensor {idx}: Mux CH{mux_ch}, ADS 0x{addr:02X}, CH{ads_ch} - OK")
+                except Exception as e:
+                    self.flow_sensors.append((mux_ch, None, ads_ch))
+                    print(f"Flow Sensor {idx}: Mux CH{mux_ch}, ADS 0x{addr:02X}, CH{ads_ch} - Failed: {e}")
+            
+            return True
             
         except Exception as e:
-            print(f"Hardware initialization failed: {e}")
+            print(f"Initialization failed: {e}")
             return False
 
-    def _convert_voltage_to_flow(self, voltage):
-        """Convert voltage reading from flow sensor to flow rate in l/s"""
-        # This is a placeholder - you'll need to implement your specific conversion formula
-        # Example: linear conversion (adjust coefficients based on your sensor)
-        return voltage * 2.5  # Example conversion: 1V = 2.5 l/s
-
     def collect_data_static(self, duration_sec=0, max_samples=0):
-        """Collect data from all active thermocouples and flow sensors through the multiplexer"""
-        if not self.thermocouples and not self.flow_sensors:
+        """Collect data through multiplexer channels"""
+        if not any(tc[1] for tc in self.thermocouples) and not any(fs[1] for fs in self.flow_sensors):
             print("No sensors initialized!")
             return
             
         self.recording = True
-        self.test_start_time = time.monotonic()  # Capture test start time
+        self.test_start_time = time.monotonic()
         sample_count = 0
-        
-        print(f"Starting data collection at {self._format_timestamp(0)}...")
         
         try:
             while self.recording:
                 current_time = time.monotonic()
-                elapsed = self._get_elapsed_time(current_time)
+                elapsed = current_time - self.test_start_time
                 
-                # Check duration/sample limits
-                if (duration_sec > 0 and elapsed >= duration_sec):
-                    break
-                if (max_samples > 0 and sample_count >= max_samples):
+                # Check termination conditions
+                if (duration_sec > 0 and elapsed >= duration_sec) or (max_samples > 0 and sample_count >= max_samples):
                     break
                 
-                # Take synchronized readings
+                # Read thermocouples through their mux channels
                 temp_readings = []
-                flow_readings = []
-                
-                # Read thermocouples
-                for i, (channel, tc) in enumerate(self.thermocouples):
+                for idx, (mux_ch, tc) in enumerate(self.thermocouples):
                     if tc is not None:
                         try:
+                            # The multiplexer channel is already set in the sensor object
                             temp = tc.temperature
-                            self.rec_temp[i].append(temp)
-                        except OSError as e:
+                            self.rec_temp[idx].append(temp)
+                        except Exception as e:
                             temp = None
-                            self.rec_temp[i].append(None)
-                            print(f"[{self._format_timestamp(elapsed)}] Error reading thermocouple CH{channel}: {e}")
+                            self.rec_temp[idx].append(None)
+                            print(f"[{self._format_timestamp(elapsed)}] Thermocouple CH{mux_ch} error: {e}")
                     else:
                         temp = None
-                        self.rec_temp[i].append(None)
-                    temp_readings.append((temp, channel))
+                        self.rec_temp[idx].append(None)
+                    temp_readings.append((mux_ch, temp))
                 
-                # Read flow sensors
-                for i, (channel, ads, ads_ch) in enumerate(self.flow_sensors):
+                # Read flow sensors through their mux channels
+                flow_readings = []
+                for idx, (mux_ch, ads, ads_ch) in enumerate(self.flow_sensors):
                     if ads is not None:
                         try:
-                            # Read the specific ADS channel
+                            # The multiplexer channel is already set in the ADS object
                             chan = AnalogIn(ads, getattr(ADS, f'P{ads_ch}'))
                             voltage = chan.voltage
-                            flow_rate = self._convert_voltage_to_flow(voltage)
-                            self.rec_flow[i].append(flow_rate)
-                        except OSError as e:
-                            flow_rate = None
-                            self.rec_flow[i].append(None)
-                            print(f"[{self._format_timestamp(elapsed)}] Error reading flow sensor CH{channel}: {e}")
+                            flow = self._convert_voltage_to_flow(voltage)
+                            self.rec_flow[idx].append(flow)
+                        except Exception as e:
+                            flow = None
+                            self.rec_flow[idx].append(None)
+                            print(f"[{self._format_timestamp(elapsed)}] Flow CH{mux_ch} error: {e}")
                     else:
-                        flow_rate = None
-                        self.rec_flow[i].append(None)
-                    flow_readings.append((flow_rate, channel))
+                        flow = None
+                        self.rec_flow[idx].append(None)
+                    flow_readings.append((mux_ch, flow))
                 
-                # Store timestamp for this sample
+                # Store timestamp
                 for i in range(len(self.rec_time)):
                     if i < len(self.rec_time):
                         self.rec_time[i].append(elapsed)
                 
-                # Print readings every 0.5 seconds
+                # Print readings
                 print(f"[{self._format_timestamp(elapsed)}] ", end='')
-                for temp, ch in temp_readings:
-                    print(f"TEMP_CH{ch}={temp}°C ", end='')
-                for flow, ch in flow_readings:
-                    print(f"FLOW_CH{ch}={flow}l/s ", end='')
+                for ch, temp in temp_readings:
+                    print(f"T{ch}={temp}°C " if temp is not None else f"T{ch}=X ", end='')
+                for ch, flow in flow_readings:
+                    print(f"F{ch}={flow}L/s " if flow is not None else f"F{ch}=X ", end='')
                 print()
                 
                 sample_count += 1
-                time.sleep(0.5)  # 2Hz sampling rate
+                time.sleep(0.5)
                 
         except KeyboardInterrupt:
-            elapsed = self._get_elapsed_time(time.monotonic())
-            print(f"[{self._format_timestamp(elapsed)}] Data collection interrupted!")
+            print("\nCollection interrupted by user")
         finally:
             self.recording = False
-            elapsed = self._get_elapsed_time(time.monotonic())
-            print(f"[{self._format_timestamp(elapsed)}] Collection complete. Stored {sample_count} samples per sensor.")
-
-    def collect_data_dynamic(self, duration_sec=0, max_samples=0):
-        """Collect data from all active thermocouples through the multiplexer"""
-        if not self.thermocouples:
-            print("No thermocouples initialized!")
-            return
-            
-        self.recording = True
-        self.test_start_time = time.monotonic()  # Capture test start time
-        sample_count = 0
-        
-        print(f"Starting data collection at {self._format_timestamp(0)}...")
-        
-        try:
-            while self.recording:
-                current_time = time.monotonic()
-                elapsed = self._get_elapsed_time(current_time)
-                
-                # Check duration/sample limits
-                if (duration_sec > 0 and elapsed >= duration_sec):
-                    break
-                if (max_samples > 0 and sample_count >= max_samples):
-                    break
-                
-                # Take synchronized readings
-                readings = []
-                
-                for i, (channel, tc) in enumerate(self.thermocouples):
-                    if tc is not None:
-                        try:
-                            temp = tc.temperature
-                            self.rec_temp[i].append(temp)
-                            self.rec_time[i].append(elapsed)
-                        except OSError as e:
-                            temp = None
-                            self.rec_temp[i].append(None)
-                            self.rec_time[i].append(elapsed)
-                            print(f"[{self._format_timestamp(elapsed)}] Error reading CH{channel}: {e}")
-                    else:
-                        temp = None
-                        self.rec_temp[i].append(None)
-                        self.rec_time[i].append(elapsed)
-                    readings.append((temp, elapsed))
-                
-                # Print readings every 0.5 seconds
-                print(f"[{self._format_timestamp(elapsed)}] ", end='')
-                for idx, (temp, t) in enumerate(readings):
-                    channel, _ = self.THERMOCOUPLE_CONFIG[idx]
-                    print(f"CH{channel}={temp}°C ", end='')
-                print()
-                
-                sample_count += 1
-                time.sleep(0.5)  # 2Hz sampling rate
-                
-        except KeyboardInterrupt:
-            elapsed = self._get_elapsed_time(time.monotonic())
-            print(f"[{self._format_timestamp(elapsed)}] Data collection interrupted!")
-        finally:
-            self.recording = False
-            elapsed = self._get_elapsed_time(time.monotonic())
-            print(f"[{self._format_timestamp(elapsed)}] Collection complete. Stored {sample_count} samples per sensor.")
-
+            elapsed = time.monotonic() - self.test_start_time
+            print(f"Collection complete. Duration: {elapsed:.1f}s, Samples: {sample_count}")
     def get_data(self):
         """Return recorded data as (temperatures, flows, timestamps) tuple"""
         return (self.rec_temp, self.rec_flow, self.rec_time)
@@ -377,7 +195,7 @@ class MultiplexedThermocoupleLogger:
 logger = MultiplexedThermocoupleLogger(mux_address=0x70)
  # Channel 2
 logger.add_flow_sensor(4, 0x48, 0)  # Channel 4
-logger.add_thermocouple(0, 0x67)  # Channel 0
+logger.add_thermocouple(0, 0x66)  # Channel 0
 logger.add_thermocouple(1, 0x66)  # Channel
 logger.add_thermocouple(2, 0x67)  # Channel 2
 logger.initialize_hardware_static()
