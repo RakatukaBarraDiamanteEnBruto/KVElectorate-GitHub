@@ -842,12 +842,12 @@ class StateMachine:
                     if state1 and not state2:
                         print("Static mode selected", end='\r')
                         if button.is_pressed:
-                            time.sleep(0.1)  # Debounce
+                            time.sleep(0.3)  # Debounce
                             self.transition_to(State.PRECHECK_STATIC)
                     elif state2 and not state1:
                         print("Dynamic mode selected", end='\r')
                         if button.is_pressed:
-                            time.sleep(0.1)  # Debounce
+                            time.sleep(0.3)  # Debounce
                             self.transition_to(State.PRECHECK_DYNAMIC)
                     else:
                         print("No mode selected", end='\r')
