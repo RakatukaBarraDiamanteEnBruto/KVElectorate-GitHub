@@ -187,8 +187,8 @@ class MultiplexedThermocoupleLogger:
             print(f"Initialization failed: {e}")
             return False
 
-    def initialize_hardware_dynamic(self):
-        """Initialize only thermocouples through multiplexer for dynamic tests"""
+    def initialize_hardware_DYNAMIC(self):
+        """Initialize only thermocouples through multiplexer for DYNAMIC tests"""
         try:
             # Initialize I2C bus
             self.i2c = busio.I2C(self.I2C_SCL_PIN, self.I2C_SDA_PIN)
@@ -216,7 +216,7 @@ class MultiplexedThermocoupleLogger:
             return any(tc[1] is not None for tc in self.thermocouples)
             
         except Exception as e:
-            print(f"Dynamic initialization failed: {e}")
+            print(f"DYNAMIC initialization failed: {e}")
             return False
 
     def collect_data_static(self, duration_sec=0, max_samples=0):
@@ -294,8 +294,8 @@ class MultiplexedThermocoupleLogger:
             elapsed = time.monotonic() - self.test_start_time
             print(f"Collection complete. Duration: {elapsed:.1f}s, Samples: {sample_count}")
 
-    def collect_data_dynamic(self, duration_sec=0, max_samples=0):
-        """Collect data from thermocouples only for dynamic tests"""
+    def collect_data_DYNAMIC(self, duration_sec=0, max_samples=0):
+        """Collect data from thermocouples only for DYNAMIC tests"""
         if not any(tc[1] for tc in self.thermocouples):
             print("No thermocouples initialized!")
             return
@@ -352,7 +352,7 @@ class MultiplexedThermocoupleLogger:
         return (self.rec_temp, self.rec_flow, self.rec_time)
     
     def get_data_DYNAMIC(self):
-        """Return recorded data for dynamic tests as (temperatures, timestamps) tuple"""
+        """Return recorded data for DYNAMIC tests as (temperatures, timestamps) tuple"""
         return (self.rec_temp, self.rec_time)
 
     def clear_data(self):
@@ -397,7 +397,7 @@ def ledscpt():
 
 
             while KVEBench.current_state  == State.PRECHECK_DYNAMIC or KVEBench.current_state == State.PRECHECK_STATIC: # It will blink LED2 it will also set a variable that will decide what LED 
-                                                                                    # set if the next LED is blue or white for the static or dynamic running mode
+                                                                                    # set if the next LED is blue or white for the static or DYNAMIC running mode
                             
                 LED1.off()
                 time.sleep(0.2)
@@ -413,7 +413,7 @@ def ledscpt():
                 time.sleep(0.2)
                 LED2.on()
                 time.sleep(0.2)  
-        if KVEBench.current_state  == State.RUNNING and runmode == False: # RUNNING State LED Script, It just makes LED3 Blink during dynamic test 
+        if KVEBench.current_state  == State.RUNNING and runmode == False: # RUNNING State LED Script, It just makes LED3 Blink during DYNAMIC test 
             while KVEBench.current_state == State.RUNNING:
 
                 LED3.off()
@@ -428,7 +428,7 @@ def ledscpt():
 
                         LED2.on()
 
-                if KVEBench.current_state  == State.COMPLETED and runmode == False: # COMPLETED State LED Script, It just makes LED3 on after dynamic test 
+                if KVEBench.current_state  == State.COMPLETED and runmode == False: # COMPLETED State LED Script, It just makes LED3 on after DYNAMIC test 
                     while KVEBench.current_state == State.COMPLETED:
 
                         LED3.on()
@@ -786,7 +786,7 @@ class StateMachine:
                     bLED.off()
                     time.sleep(0.5)
 
-        global runmode #Variable to control the run mode, static or dynamic through the switch
+        global runmode #Variable to control the run mode, static or DYNAMIC through the switch
         """Main loop for the state machine"""
         self.current_state = State.IDLE  # Initialize to IDLE state
         
@@ -829,7 +829,7 @@ class StateMachine:
                 print("System in IDLE state, waiting for mode selection...")
                 
                 """""
-                logger.initialize_hardware_dynamic()
+                logger.initialize_hardware_DYNAMIC()
                 while not logtemp.control_temperature() :  Uncomment this when putting in PRE_CODE
                     print("Controlling temperature...")
                     time.sleep(1)
@@ -845,7 +845,7 @@ class StateMachine:
                             time.sleep(0.3)  # Debounce
                             self.transition_to(State.PRECHECK_STATIC)
                     elif state2 and not state1:
-                        print("Dynamic mode selected", end='\r')
+                        print("DYNAMIC mode selected", end='\r')
                         if button.is_pressed:
                             time.sleep(0.3)  # Debounce
                             self.transition_to(State.PRECHECK_DYNAMIC)
@@ -853,8 +853,8 @@ class StateMachine:
                         print("No mode selected", end='\r')
 
             elif self.current_state == State.PRECHECK_DYNAMIC:
-                print("Starting dynamic precheck...")
-                if not logger.initialize_hardware_dynamic():
+                print("Starting DYNAMIC precheck...")
+                if not logger.initialize_hardware_DYNAMIC():
                     self.transition_to(State.ERROR, "Hardware initialization failed")
                     continue
                 time.sleep(2)  # 
@@ -876,16 +876,16 @@ class StateMachine:
                 if state1 and not state2:
                     logger.collect_data_static(duration_sec=10, max_samples=100)
                 if state2 and not state1:
-                    logger.collect_data_dynamic(duration_sec=10, max_samples=100)
-                """if self.current_state == State.RUNNING:  # Only proceed if not interrupted
+                    logger.collect_data_DYNAMIC(duration_sec=10, max_samples=100)
+                if self.current_state == State.RUNNING:  # Only proceed if not interrupted
                     if state1 and not state2:
                         temperatures, timestamps = logger.get_data_static()
                         print("Test data collected successfully")
                         self.transition_to(State.COMPLETED)
-                    if state2 and not state1:                                                   Dont Know wtf this did
-                        temperatures, timestamps = logger.get_data_dynamic()                    Gotta check why temperature and timestamps was collectd from get data
+                    if state2 and not state1:                                                  # Dont Know wtf this did
+                        temperatures, timestamps = logger.get_data_DYNAMIC()                    #Gotta check why temperature and timestamps was collectd from get data
                         print("Test data collected successfully")
-                        self.transition_to(State.COMPLETED) """   
+                        self.transition_to(State.COMPLETED)  
 
             elif self.current_state == State.COMPLETED:
                 "Ivan put here the logger data collection"
