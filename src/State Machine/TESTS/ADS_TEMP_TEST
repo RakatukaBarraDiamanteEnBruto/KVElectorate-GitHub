@@ -84,16 +84,7 @@ LED4 = LED(21)  # ERRROR Led
 #PINS for button
 button = Button(18) # com cable to GPIO 18, NO  to GND
 bLED = LED(14)  # Button LED Gotta check if this pin is free
-"SCRIPT TOO CONTROL THE BLINKING OF THE BUTTON LED"
 
-def button_led():
-    """Thread function to control the button LED"""
-    while True:
-        if not State.IDLE:
-            bLED.on()  # Turn on error LED when button is pressed
-            time.sleep(0.5)
-            bLED.off()
-            time.sleep(0.5)
 
 "THERMOCOUPLE CONTROLLER OBJECT"
 
@@ -784,6 +775,17 @@ class StateMachine:
         # Turn off RED tower light
     def run(self):
 
+        "SCRIPT TOO CONTROL THE BLINKING OF THE BUTTON LED"
+
+        def button_led():
+            """Thread function to control the button LED"""
+            while True:
+                if not State.IDLE:
+                    bLED.on()  # Turn on error LED when button is pressed
+                    time.sleep(0.5)
+                    bLED.off()
+                    time.sleep(0.5)
+
         global runmode #Variable to control the run mode, static or dynamic through the switch
         """Main loop for the state machine"""
         self.current_state = State.IDLE  # Initialize to IDLE state
@@ -796,9 +798,10 @@ class StateMachine:
         ledthr.start()  # Start the LED control thread
         
         logger = MultiplexedThermocoupleLogger() #specific object to control thermocouples
-        
-        logtemp = TemperatureController(logger, fan_pin=[20], heater_pin=[21], heater_fan_pin=[16]) #specific object to control the temperature control
-        logtemp.set_temperature_range(29.0, 31.0, hysteresis=1.0)
+      
+        #logtemp = TemperatureController(logger, fan_pin=[20], heater_pin=[21], heater_fan_pin=[16]) #specific object to control the temperature control
+        #logtemp.set_temperature_range(29.0, 31.0, hysteresis=1.0)
+
 
         # Add thermocouples add flow sensors to the logger
         logger.add_flow_sensor(4, 0x48, 0)  # Channel 4 Channel ADS 0
@@ -917,3 +920,4 @@ class StateMachine:
 
 KVEBench = StateMachine()
 KVEBench.run()  # Start the state machine
+
