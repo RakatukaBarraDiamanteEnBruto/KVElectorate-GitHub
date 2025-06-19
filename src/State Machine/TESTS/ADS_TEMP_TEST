@@ -857,15 +857,7 @@ class StateMachine:
                 if not logger.initialize_hardware_dynamic():
                     self.transition_to(State.ERROR, "Hardware initialization failed")
                     continue
-                
-                # Simulate precheck with interruptible delay
-                start_time = time.time()
-                while time.time() - start_time < 5:  # 5 second precheck
-                    if self.current_state != State.PRECHECK_DYNAMIC:  # Check if interrupted
-                        break
-                    print(f"Precheck progress: {int((time.time()-start_time)/5*100)}%", end='\r')
-                    time.sleep(0.1)
-                
+                time.sleep(2)  # 
                 if self.current_state == State.PRECHECK_DYNAMIC:  # Only transition if not interrupted
                     self.transition_to(State.RUNNING)
 
@@ -874,14 +866,7 @@ class StateMachine:
                 if not logger.initialize_hardware_static():
                     self.transition_to(State.ERROR, "Hardware initialization failed")
                     continue
-                
-                # Simulate precheck with interruptible delay
-                start_time = time.time()
-                while time.time() - start_time < 5:  # 5 second precheck
-                    if self.current_state != State.PRECHECK_STATIC:  # Check if interrupted
-                        break
-                    print(f"Precheck progress: {int((time.time()-start_time)/5*100)}%", end='\r')
-                    time.sleep(0.1)
+                time.sleep(2)  # Allow time for precheck
                 
                 if self.current_state == State.PRECHECK_STATIC:  # Only transition if not interrupted
                     self.transition_to(State.RUNNING)
