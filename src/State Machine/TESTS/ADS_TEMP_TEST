@@ -41,7 +41,7 @@ try:
 except ModuleNotFoundError:
     from unittest import mock
     gpiozero = mock.MagicMock()
-    try:
+try:
     from gpiozero import Button
 except (ModuleNotFoundError, ImportError):
     from unittest.mock import MagicMock
@@ -389,7 +389,7 @@ def ledscpt():
                 while State.IDLE == True:
 
                     print("LEDs are ON in IDLE state")  
-                    sleep(1)
+                    time.sleep(1)
                 
                 
 
