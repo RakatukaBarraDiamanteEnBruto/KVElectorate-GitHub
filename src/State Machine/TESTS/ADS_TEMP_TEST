@@ -806,8 +806,8 @@ class StateMachine:
         # Add thermocouples add flow sensors to the logger
         logger.add_flow_sensor(4, 0x48, 0)  # Channel 4 Channel ADS 0
         logger.add_thermocouple(0, 0x66)  # Channel 0
-        logger.add_thermocouple(1, 0x66)  # Channel 1
-        logger.add_thermocouple(2, 0x67)  # Channel 2
+        logger.add_thermocouple(1, 0x67)  # Channel 1
+        logger.add_thermocouple(2, 0x66)  # Channel 2
 
         # Button press handler for interrupts
         def handle_button_press():
