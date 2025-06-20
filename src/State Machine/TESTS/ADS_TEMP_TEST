@@ -411,20 +411,21 @@ def ledscpt():
                 
                 
                 
-        if KVEBench.current_state  == State.RUNNING and state1 and not state2: # RUNNING State LED Script, It just makes LED2 Blink during static test
-            while KVEBench.current_state == State.RUNNING:
+        if KVEBench.current_state  == State.RUNNING : # RUNNING State LED Script, It just makes LED2 or 3 Blink during static or dinamic test
+            while KVEBench.current_state == State.RUNNING and state1 and not state2:
 
                 LED2.off()
                 time.sleep(0.2)
                 LED2.on()
                 time.sleep(0.2)  
-        if KVEBench.current_state  == State.RUNNING and state2 and not state1: # RUNNING State LED Script, It just makes LED3 Blink during DYNAMIC test 
-            while KVEBench.current_state == State.RUNNING:
+            while KVEBench.current_state == State.RUNNING and state2 and not state1:
 
                 LED3.off()
                 time.sleep(0.2)
                 LED3.on()           
                 time.sleep(0.2)
+
+        
 
         if KVEBench.current_state  == State.COMPLETED: # COMPLETED State LED Script, It just makes LED1 ON
             while KVEBench.current_state == State.COMPLETED:
@@ -901,7 +902,9 @@ class StateMachine:
                     time.sleep(0.5)
                 
                 if self.current_state == State.COMPLETED:  # Only transition if not interrupted
+                    ledthr.join()
                     self.transition_to(State.IDLE)
+
 
             elif self.current_state == State.ERROR:
                 print(f"Error: {self.get_error_message()}")
