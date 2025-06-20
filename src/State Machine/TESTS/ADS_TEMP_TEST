@@ -393,7 +393,7 @@ def ledscpt():
             LED2.off() #RUNNING STATIC LED
             LED3.off() #RUNNING DYNAMIC LED
             LED4.off()   #ERROR LED
-            
+            print("LEDs are ON in PRECHECK state")  
 
 
             while KVEBench.current_state  == State.PRECHECK_DYNAMIC or KVEBench.current_state == State.PRECHECK_STATIC: # It will blink LED2 it will also set a variable that will decide what LED 
@@ -404,7 +404,7 @@ def ledscpt():
                 LED1.on()
                 time.sleep(0.2)  
                 
-                print("LEDs are ON in PRECHECK state")  
+                
                 
         if KVEBench.current_state  == State.RUNNING and runmode == True: # RUNNING State LED Script, It just makes LED2 Blink during static test
             while KVEBench.current_state == State.RUNNING:
@@ -879,7 +879,7 @@ class StateMachine:
                     logger.collect_data_DYNAMIC(duration_sec=10, max_samples=100)
                 if self.current_state == State.RUNNING:  # Only proceed if not interrupted
                     if state1 and not state2:
-                        temperatures, timestamps = logger.get_data_static()
+                        temperatures, timestamps, flow = logger.get_data_static()
                         print("Test data collected successfully")
                         self.transition_to(State.COMPLETED)
                     if state2 and not state1:                                                  # Dont Know wtf this did
