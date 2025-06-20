@@ -18,7 +18,8 @@ Missing Features:
 - Button interruption handling for immediate test shutdown
 - Button led control for visual feedback
 -Flow vortex sensor integration
--
+-Full list of thermocouples and their addresses in the configuration
+- Proper timestamping for temperature readings(right now its 121432343s since epoch, it should be in a human-readable format flow 20 s, 21 s etc.)
 
 """
 try:
@@ -561,7 +562,7 @@ class StateMachine:
                     print(f"{temp} Cº, {t} s")
                         
                 else:
-                        print("Failed to initialize hardware!")                
+                        print("Failed to run test hardware!")                
                 self.transition_to(State.COMPLETED)
                 
             elif self.current_state == State.COMPLETED:
