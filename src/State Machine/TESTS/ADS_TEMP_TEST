@@ -21,7 +21,12 @@ Features Implemented:
 Missing Features:
 - Data logging to a file or database
 
+NOTES:
+All feauters implemented works as intended, except temperature control which hasnt been tested yet.
 
+Once tested push to prepod
+
+For the data logger. Look into how to access the data from temperatures, timestamps, flow  variables. Line 885, 889
 
 """
 
