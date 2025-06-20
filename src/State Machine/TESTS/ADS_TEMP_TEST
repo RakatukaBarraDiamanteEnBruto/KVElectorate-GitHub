@@ -839,11 +839,11 @@ class StateMachine:
 
                 print("System in IDLE state, waiting for mode selection...")
                 
-               # logger.initialize_hardware_DYNAMIC()
-                #logtemp = TemperatureController(logger, fan_pin=17, heater_pin=27, heater_fan_pin=22)  # Initialize temperature controller
-                #while not logtemp.control_temperature() :  
-                 #   print("Controlling temperature...")
-                  #  time.sleep(1)
+                logger.initialize_hardware_DYNAMIC()
+                logtemp = TemperatureController(logger, fan_pin=17, heater_pin=27, heater_fan_pin=22)  # Initialize temperature controller
+                while not logtemp.control_temperature() :  
+                    print("Controlling temperature...")
+                    time.sleep(1)
                
                     
                 while self.current_state == State.IDLE:
