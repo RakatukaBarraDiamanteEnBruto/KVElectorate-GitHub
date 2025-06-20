@@ -6,6 +6,8 @@ GPIO.setmode(GPIO.BCM)  # Use Broadcom pin numbering
 
 # Define the pins connected to your three-state switch
 # For a three-state switch, you'll typically need two input pins
+#important: The common should be connected to power. Which is the opposite case with the button.
+
 SWITCH_PIN1 = 12  # First switch position (e.g., left)
 SWITCH_PIN2 = 25  # Second switch position (e.g., right)
 
