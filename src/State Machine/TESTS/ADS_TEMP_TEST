@@ -912,7 +912,7 @@ class StateMachine:
                     time.sleep(0.5)
                 
                 if self.current_state == State.COMPLETED:  # Only transition if not interrupted
-                    
+                    logger.clear_data()
                     self.transition_to(State.IDLE)
                     
 
