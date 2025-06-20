@@ -65,7 +65,7 @@ GPIO.setmode(GPIO.BCM)
 # Pins for switch
 
 SWITCH_PIN_1 = 23  # Change to your first GPIO pin
-SWITCH_PIN_2 = 25  # Change to your second GPIO pin
+SWITCH_PIN_2 = 24  # Change to your second GPIO pin
 
 # Set up the pins as inputs with pull-down resistors
 GPIO.setup(SWITCH_PIN_1, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
@@ -75,8 +75,8 @@ state1 = GPIO.input(SWITCH_PIN_1) #Change to DYNAMIC and static later
 state2 = GPIO.input(SWITCH_PIN_2)
 #Pins for leds
 
-LED1 = LED(24) # PRECHECK Led
-LED2 = LED(17) # RUNNING STATIC Led
+LED1 = LED(25) # PRECHECK Led
+LED2 = LED(16) # RUNNING STATIC Led
 LED3 = LED(20)  # RUNNING DYNAMIC Led
 LED4 = LED(21)  # ERRROR Led
 
@@ -799,7 +799,7 @@ class StateMachine:
         
         logger = MultiplexedThermocoupleLogger() #specific object to control thermocouples
       
-        #logtemp = TemperatureController(logger, fan_pin=[20], heater_pin=[21], heater_fan_pin=[16]) #specific object to control the temperature control
+        #logtemp = TemperatureController(logger, fan_pin=[13], heater_pin=[19], heater_fan_pin=[26]) #specific object to control the temperature control
         #logtemp.set_temperature_range(29.0, 31.0, hysteresis=1.0)
 
 
