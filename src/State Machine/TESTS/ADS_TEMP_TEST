@@ -780,7 +780,7 @@ class StateMachine:
         def button_led():
             """Thread function to control the button LED"""
             while True:
-                if not State.IDLE:
+                if KVEBench.current_state!= State.IDLE:
                     bLED.on()  # Turn on error LED when button is pressed
                     time.sleep(0.5)
                     bLED.off()
