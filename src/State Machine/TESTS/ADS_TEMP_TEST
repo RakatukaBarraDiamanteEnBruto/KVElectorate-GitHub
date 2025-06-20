@@ -609,6 +609,9 @@ class StateMachine:
         self.previous_state = None
         self.error_message = None
         
+        self.collected_temperatures = None
+        self.collected_timestamps = None
+        self.collected_flow = None
         # Define valid state transitions
         self.valid_transitions = {
             State.IDLE: [State.PRECHECK_DYNAMIC,State.PRECHECK_STATIC, State.ERROR],
@@ -887,17 +890,22 @@ class StateMachine:
                     logger.collect_data_DYNAMIC(duration_sec=10, max_samples=100)
                 if self.current_state == State.RUNNING:  # Only proceed if not interrupted
                     if state1 and not state2:
-                        temperatures, timestamps, flow = logger.get_data_static()
+                        self.collected_temperatures, self.collected_flow, self.collected_timestamps = logger.get_data_static()
                         print("Test data collected successfully")
                         self.transition_to(State.COMPLETED)
                     if state2 and not state1:                                                  # Dont Know wtf this did
-                        temperatures, timestamps = logger.get_data_DYNAMIC()                    #Gotta check why temperature and timestamps was collectd from get data
+                        self.collected_temperatures, self.collected_timestamps = logger.get_data_DYNAMIC()
+                        self.collected_flow = None                    #Gotta check why temperature and timestamps was collectd from get data
                         print("Test data collected successfully")
                         self.transition_to(State.COMPLETED)  
 
             elif self.current_state == State.COMPLETED:
                 "Ivan put here the logger data collection"
                 print("Test completed successfully")
+                print("Collected results:")
+                print("Temperatures:", self.collected_temperatures)
+                print("Timestamps:", self.collected_timestamps)
+                print("Flow:", self.collected_flow)
                 for i in range(3):  # Brief completion indication
                     if self.current_state != State.COMPLETED:  # Check if interrupted
                         break
