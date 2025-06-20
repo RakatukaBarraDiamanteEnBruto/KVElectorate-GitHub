@@ -406,14 +406,14 @@ def ledscpt():
                 
                 
                 
-        if KVEBench.current_state  == State.RUNNING and runmode == True: # RUNNING State LED Script, It just makes LED2 Blink during static test
+        if KVEBench.current_state  == State.RUNNING and state1 and not state2: # RUNNING State LED Script, It just makes LED2 Blink during static test
             while KVEBench.current_state == State.RUNNING:
 
                 LED2.off()
                 time.sleep(0.2)
                 LED2.on()
                 time.sleep(0.2)  
-        if KVEBench.current_state  == State.RUNNING and runmode == False: # RUNNING State LED Script, It just makes LED3 Blink during DYNAMIC test 
+        if KVEBench.current_state  == State.RUNNING and state2 and not state1: # RUNNING State LED Script, It just makes LED3 Blink during DYNAMIC test 
             while KVEBench.current_state == State.RUNNING:
 
                 LED3.off()
