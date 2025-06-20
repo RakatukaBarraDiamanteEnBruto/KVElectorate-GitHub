@@ -385,7 +385,7 @@ def ledscpt():
                 LED2.on() #RUNNING STATIC LED
                 LED3.on() #RUNNING DYNAMIC LED
                 LED4.on()   #ERROR LED
-                print("LEDs are ON in IDLE state")  
+                print("LEDs are ON in IDLE state" ,end='\r')  
                 time.sleep(1)
                 
                 
@@ -836,12 +836,12 @@ class StateMachine:
 
                 print("System in IDLE state, waiting for mode selection...")
                 
-                """""
                 logger.initialize_hardware_DYNAMIC()
-                while not logtemp.control_temperature() :  Uncomment this when putting in PRE_CODE
+                logtemp = TemperatureController(logger, fan_pin=17, heater_pin=27, heater_fan_pin=22)  # Initialize temperature controller
+                while not logtemp.control_temperature() :  
                     print("Controlling temperature...")
                     time.sleep(1)
-                """""
+               
                     
                 while self.current_state == State.IDLE:
                     state1 = GPIO.input(SWITCH_PIN_1)
