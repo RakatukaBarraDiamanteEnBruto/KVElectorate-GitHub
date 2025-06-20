@@ -903,8 +903,9 @@ class StateMachine:
                     time.sleep(0.5)
                 
                 if self.current_state == State.COMPLETED:  # Only transition if not interrupted
-                    ledthr.join()
+                    
                     self.transition_to(State.IDLE)
+                    ledthr.join()
 
 
             elif self.current_state == State.ERROR:
