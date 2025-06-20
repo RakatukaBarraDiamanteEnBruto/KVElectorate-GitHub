@@ -429,12 +429,12 @@ def ledscpt():
 
         if KVEBench.current_state  == State.COMPLETED: # COMPLETED State LED Script, It just makes LED1 ON
             while KVEBench.current_state == State.COMPLETED:
-                if KVEBench.current_state  == State.COMPLETED and runmode == True: # COMPLETED State LED Script, It just makes LED2 on during static test
+                if KVEBench.current_state  == State.COMPLETED and state1 and not state2: # COMPLETED State LED Script, It just makes LED2 on during static test
                     while KVEBench.current_state == State.COMPLETED:
 
                         LED2.on()
 
-                if KVEBench.current_state  == State.COMPLETED and runmode == False: # COMPLETED State LED Script, It just makes LED3 on after DYNAMIC test 
+                if KVEBench.current_state  == State.COMPLETED and state2 and not state1: # COMPLETED State LED Script, It just makes LED3 on after DYNAMIC test 
                     while KVEBench.current_state == State.COMPLETED:
 
                         LED3.on()
@@ -827,7 +827,7 @@ class StateMachine:
         button.when_pressed = handle_button_press
 
         while True:
-            runmode = True  # Default to static mode
+           
 
         
             if self.current_state == State.IDLE:
