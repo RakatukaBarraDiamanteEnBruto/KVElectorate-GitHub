@@ -799,7 +799,7 @@ class StateMachine:
         bledthr = threading.Thread(target=button_led)  # Button LED control thread
         
         bledthr.start()  # Start the button LED control thread
-        
+        ledthr.start()  # Start the LED control thread        
         logger = MultiplexedThermocoupleLogger() #specific object to control thermocouples
       
         #logtemp = TemperatureController(logger, fan_pin=[13], heater_pin=[19], heater_fan_pin=[26]) #specific object to control the temperature control
@@ -830,7 +830,7 @@ class StateMachine:
         
             if self.current_state == State.IDLE:
                 time.sleep(2)  # Prevent busy-waiting
-                ledthr.start()  # Start the LED control thread
+
                 print("System in IDLE state, waiting for mode selection...")
                 
                 """""
@@ -903,7 +903,7 @@ class StateMachine:
                 if self.current_state == State.COMPLETED:  # Only transition if not interrupted
                     
                     self.transition_to(State.IDLE)
-                    ledthr.join()
+                    
 
 
             elif self.current_state == State.ERROR:
