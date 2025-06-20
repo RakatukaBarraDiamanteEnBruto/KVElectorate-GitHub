@@ -382,10 +382,8 @@ def ledscpt():
                 LED2.on() #RUNNING STATIC LED
                 LED3.on() #RUNNING DYNAMIC LED
                 LED4.on()   #ERROR LED
-                while State.IDLE == True:
-
-                    print("LEDs are ON in IDLE state")  
-                    time.sleep(1)
+                print("LEDs are ON in IDLE state")  
+                time.sleep(1)
                 
                 
 
