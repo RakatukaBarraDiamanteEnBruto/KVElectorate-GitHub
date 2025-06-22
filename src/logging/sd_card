@@ -1,0 +1,49 @@
+### IMPORTANT - READ THIS FIRST ###
+# Replace read_sensor() with your actual sensor reading code.
+# Adjust the Measurement class to include all data fields you want to log.
+# Change directory in save_to_csv to your SD card mount point.
+# This script creates a new CSV file for each test, named with the date and time.
+
+
+import csv
+import time
+from datetime import datetime
+
+# Example data class for a single measurement
+class Measurement:
+    def __init__(self, timestamp, sensor_value):
+        self.timestamp = timestamp
+        self.sensor_value = sensor_value
+
+# Replace this with your actual sensor reading logic
+def read_sensor():
+    # Example: return a dummy value
+    return 42.0
+
+def run_test(duration_seconds=60, frequency_hz=50):
+    measurements = []
+    interval = 1.0 / frequency_hz
+    start_time = time.time()
+    while (time.time() - start_time) < duration_seconds:
+        timestamp = time.time() - start_time
+        value = read_sensor()
+        measurements.append(Measurement(timestamp, value))
+        time.sleep(interval)
+    return measurements
+
+def save_to_csv(measurements, directory="/mnt/sdcard"):
+    # Create a unique filename with date and time
+    now = datetime.now()
+    filename = now.strftime("test_%Y%m%d_%H%M%S.csv")
+    filepath = f"{directory}/{filename}"
+    with open(filepath, mode='w', newline='') as file:
+        writer = csv.writer(file)
+        writer.writerow(["timestamp", "sensor_value"])
+        for m in measurements:
+            writer.writerow([m.timestamp, m.sensor_value])
+    print(f"Data saved to {filepath}")
+
+if __name__ == "__main__":
+    # Run the test and save results
+    data = run_test()
+    save_to_csv(data)
