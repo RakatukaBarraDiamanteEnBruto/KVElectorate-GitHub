@@ -6,7 +6,7 @@
 
 
 import csv
-import time
+import time 
 from datetime import datetime
 
 # Example data class for a single measurement
