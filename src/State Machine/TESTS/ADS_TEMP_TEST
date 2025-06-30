@@ -479,8 +479,8 @@ class TemperatureController:
         GPIO.output(self.heater_fan_pin, GPIO.LOW)
         
         # Temperature thresholds
-        self.desired_min = 25.0  # Default minimum temperature (°C)
-        self.desired_max = 30.0  # Default maximum temperature (°C)
+        self.desired_min = 15.0  # Default minimum temperature (°C)
+        self.desired_max = 17.0  # Default maximum temperature (°C)
         self.hysteresis = 1.0    # Hysteresis to prevent rapid switching
 
     def set_temperature_range(self, min_temp, max_temp, hysteresis=1.0):
