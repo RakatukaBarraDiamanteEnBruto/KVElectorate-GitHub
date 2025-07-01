@@ -1,0 +1,1005 @@
+""" The following try statements are used to import the necessary libraries for GPIO control and LED/button management.
+If the libraries are not found, mock objects are used to simulate their behavior for testing purposes.
+This allows the code to run without actual hardware, making it easier to test the state machine logic."""
+
+"""
+Features Implemented:
+- State machine with multiple states (IDLE, PRECHECK_DYNAMIC, PRECHECK_STATIC, RUNNING, COMPLETED, ERROR)
+- State transitions with entry and exit actions
+- LED control based on state
+- Button input handling for state transitions
+- DYNAMIC and static modes for running tests
+- Error handling with error messages
+- Threading for LED control to run concurrently with state machine logic
+- Multiplexed thermocouple support using TCA9548A multiplexer
+- Proper timestamping for temperature readings
+- Button interruption handling for immediate test shutdown
+-Flow vortex sensor integration * I need to finish integrating this parts 
+-Temp Control
+- Button led control for visual feedback
+
+Missing Features:
+- Data logging to a file or database
+
+NOTES:
+All feauters implemented works as intended, except temperature control which hasnt been tested yet.
+
+Once tested push to prepod
+
+For the data logger. Look into how to access the data from temperatures, timestamps, flow  variables. Line 885, 889
+
+"""
+
+
+#Time Libraries
+import time
+from datetime import timedelta
+from datetime import datetime
+#I2C and GPIO Led and button Libraries
+import board
+import busio
+import RPi.GPIO as GPIO
+import gpiozero
+from gpiozero import Button
+from gpiozero import LED
+#Sensor Libraries        
+import adafruit_tca9548a
+from adafruit_mcp9600 import MCP9600
+import adafruit_ads1x15.ads1115 as ADS
+from adafruit_ads1x15.analog_in import AnalogIn
+#Threading Libraries
+import threading
+#Logging Libraries
+import csv
+# Set up GPIO mode
+GPIO.setmode(GPIO.BCM)
+
+# Pins for switch
+
+SWITCH_PIN_1 = 23  # Change to your first GPIO pin
+SWITCH_PIN_2 = 24  # Change to your second GPIO pin
+
+# Set up the pins as inputs with pull-down resistors
+GPIO.setup(SWITCH_PIN_1, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
+GPIO.setup(SWITCH_PIN_2, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
+
+state1 = GPIO.input(SWITCH_PIN_1) #Change to DYNAMIC and static later
+state2 = GPIO.input(SWITCH_PIN_2)
+#Pins for leds
+
+LED1 = LED(25) # PRECHECK Led
+LED2 = LED(16) # RUNNING STATIC Led
+LED3 = LED(20)  # RUNNING DYNAMIC Led
+LED4 = LED(21)  # ERRROR Led
+
+
+#PINS for button
+button = Button(18) # com cable to GPIO 18, NO  to GND
+bLED = LED(14)  # Button LED Gotta check if this pin is free
+
+
+"THERMOCOUPLE CONTROLLER OBJECT"
+
+class MultiplexedThermocoupleLogger:
+    def __init__(self, mux_address=0x70):
+        """Initialize the data logger with multiplexer support"""
+        # Hardware Configuration
+        self.I2C_SDA_PIN = board.SDA
+        self.I2C_SCL_PIN = board.SCL
+        self.MUX_ADDRESS = mux_address
+        
+        # Sensor configurations - now storing mux channel with each sensor
+        self.thermocouple_config = []  # List of (mux_channel, sensor_address)
+        self.flow_sensor_config = []   # List of (mux_channel, ads_address, ads_channel)
+        
+        # Data Storage
+        self.rec_temp = []
+        self.rec_flow = []
+        self.rec_time = []
+        
+        # System State
+        self.recording = False
+        self.thermocouples = []  # List of (mux_channel, sensor) tuples
+        self.flow_sensors = []   # List of (mux_channel, ads, ads_channel) tuples
+        self.i2c = None
+        self.mux = None
+        self.test_start_time = None
+
+    def add_thermocouple(self, mux_channel, thermo_address):
+        """Add a thermocouple through the specified multiplexer channel"""
+        if mux_channel < 0 or mux_channel > 7:
+            raise ValueError("Multiplexer channel must be between 0 and 7")
+        self.thermocouple_config.append((mux_channel, thermo_address))
+        
+    def add_flow_sensor(self, mux_channel, ads_address, ads_channel):
+        """Add a flow sensor through the specified multiplexer channel"""
+        if mux_channel < 0 or mux_channel > 7:
+            raise ValueError("Multiplexer channel must be between 0 and 7")
+        if ads_channel < 0 or ads_channel > 3:
+            raise ValueError("ADS channel must be between 0 and 3")
+        self.flow_sensor_config.append((mux_channel, ads_address, ads_channel))
+
+    def _format_timestamp(self, seconds):
+        """Format seconds as HH:MM:SS.mmm"""
+        return str(timedelta(seconds=seconds))[:-3]  # Truncate microseconds
+        
+    def _convert_voltage_to_flow(self, voltage):
+        """Convert voltage reading from flow sensor to flow rate in l/s"""
+        if voltage is None:
+            return None
+        
+        # Example conversion: 1V = 2.5 l/s with 0V = 0 l/s
+        flow_rate = voltage * 2.5
+        
+        # Add any sensor-specific calibration here
+        return flow_rate
+
+    def initialize_hardware_static(self):
+        """Initialize both thermocouples and flow sensors through multiplexer"""
+        try:
+            # Initialize I2C bus
+            self.i2c = busio.I2C(self.I2C_SCL_PIN, self.I2C_SDA_PIN)
+            
+            # Initialize multiplexer
+            self.mux = adafruit_tca9548a.TCA9548A(self.i2c, address=self.MUX_ADDRESS)
+            print(f"Multiplexer initialized at 0x{self.MUX_ADDRESS:02X}")
+            
+            # Initialize data storage
+            self.rec_temp = [[] for _ in range(len(self.thermocouple_config))]
+            self.rec_flow = [[] for _ in range(len(self.flow_sensor_config))]
+            self.rec_time = [[] for _ in range(max(len(self.thermocouple_config), len(self.flow_sensor_config)))]
+            
+            # Initialize thermocouples through their mux channels
+            self.thermocouples = []
+            for idx, (mux_ch, addr) in enumerate(self.thermocouple_config):
+                try:
+                    channel = self.mux[mux_ch]
+                    tc = MCP9600(channel, address=addr)
+                    self.thermocouples.append((mux_ch, tc))
+                    print(f"Thermocouple {idx}: Mux CH{mux_ch}, Addr 0x{addr:02X} - OK")
+                except Exception as e:
+                    self.thermocouples.append((mux_ch, None))
+                    print(f"Thermocouple {idx}: Mux CH{mux_ch}, Addr 0x{addr:02X} - Failed: {e}")
+            
+            # Initialize flow sensors through their mux channels
+            self.flow_sensors = []
+            for idx, (mux_ch, addr, ads_ch) in enumerate(self.flow_sensor_config):
+                try:
+                    channel = self.mux[mux_ch]
+                    ads = ADS.ADS1115(channel, address=addr)
+                    self.flow_sensors.append((mux_ch, ads, ads_ch))
+                    print(f"Flow Sensor {idx}: Mux CH{mux_ch}, ADS 0x{addr:02X}, CH{ads_ch} - OK")
+                except Exception as e:
+                    self.flow_sensors.append((mux_ch, None, ads_ch))
+                    print(f"Flow Sensor {idx}: Mux CH{mux_ch}, ADS 0x{addr:02X}, CH{ads_ch} - Failed: {e}")
+            
+            return True
+            
+        except Exception as e:
+            print(f"Initialization failed: {e}")
+            return False
+
+    def initialize_hardware_DYNAMIC(self):
+        """Initialize only thermocouples through multiplexer for DYNAMIC tests"""
+        try:
+            # Initialize I2C bus
+            self.i2c = busio.I2C(self.I2C_SCL_PIN, self.I2C_SDA_PIN)
+            
+            # Initialize multiplexer
+            self.mux = adafruit_tca9548a.TCA9548A(self.i2c, address=self.MUX_ADDRESS)
+            print(f"Multiplexer initialized at 0x{self.MUX_ADDRESS:02X}")
+            
+            # Initialize data storage for thermocouples only
+            self.rec_temp = [[] for _ in range(len(self.thermocouple_config))]
+            self.rec_time = [[] for _ in range(len(self.thermocouple_config))]
+            
+            # Initialize thermocouples through their mux channels
+            self.thermocouples = []
+            for idx, (mux_ch, addr) in enumerate(self.thermocouple_config):
+                try:
+                    channel = self.mux[mux_ch]
+                    tc = MCP9600(channel, address=addr)
+                    self.thermocouples.append((mux_ch, tc))
+                    print(f"Thermocouple {idx}: Mux CH{mux_ch}, Addr 0x{addr:02X} - OK")
+                except Exception as e:
+                    self.thermocouples.append((mux_ch, None))
+                    print(f"Thermocouple {idx}: Mux CH{mux_ch}, Addr 0x{addr:02X} - Failed: {e}")
+            
+            return any(tc[1] is not None for tc in self.thermocouples)
+            
+        except Exception as e:
+            print(f"DYNAMIC initialization failed: {e}")
+            return False
+
+    def collect_data_static(self, duration_sec=0, max_samples=0):
+        """Collect data from both thermocouples and flow sensors"""
+        if not any(tc[1] for tc in self.thermocouples) and not any(fs[1] for fs in self.flow_sensors):
+            print("No sensors initialized!")
+            return
+            
+        self.recording = True
+        self.test_start_time = time.monotonic()
+        sample_count = 0
+        
+        try:
+            while self.recording:
+                current_time = time.monotonic()
+                elapsed = current_time - self.test_start_time
+                
+                if (duration_sec > 0 and elapsed >= duration_sec) or (max_samples > 0 and sample_count >= max_samples):
+                    break
+                
+                # Read thermocouples
+                temp_readings = []
+                for idx, (mux_ch, tc) in enumerate(self.thermocouples):
+                    if tc is not None:
+                        try:
+                            temp = tc.temperature
+                            self.rec_temp[idx].append(temp)
+                        except Exception as e:
+                            temp = None
+                            self.rec_temp[idx].append(None)
+                            print(f"[{self._format_timestamp(elapsed)}] Thermocouple CH{mux_ch} error: {e}")
+                    else:
+                        temp = None
+                        self.rec_temp[idx].append(None)
+                    temp_readings.append((mux_ch, temp))
+                
+                # Read flow sensors
+                flow_readings = []
+                for idx, (mux_ch, ads, ads_ch) in enumerate(self.flow_sensors):
+                    if ads is not None:
+                        try:
+                            chan = AnalogIn(ads, getattr(ADS, f'P{ads_ch}'))
+                            voltage = chan.voltage
+                            flow = self._convert_voltage_to_flow(voltage)
+                            self.rec_flow[idx].append(flow)
+                        except Exception as e:
+                            flow = None
+                            self.rec_flow[idx].append(None)
+                            print(f"[{self._format_timestamp(elapsed)}] Flow CH{mux_ch} error: {e}")
+                    else:
+                        flow = None
+                        self.rec_flow[idx].append(None)
+                    flow_readings.append((mux_ch, flow))
+                
+                # Store timestamp
+                for i in range(len(self.rec_time)):
+                    if i < len(self.rec_time):
+                        self.rec_time[i].append(elapsed)
+                
+                # Print readings
+                print(f"[{self._format_timestamp(elapsed)}] ", end='')
+                for ch, temp in temp_readings:
+                    print(f"T{ch}={temp}°C " if temp is not None else f"T{ch}=X ", end='')
+                for ch, flow in flow_readings:
+                    print(f"F{ch}={flow}L/s " if flow is not None else f"F{ch}=X ", end='')
+                print()
+                
+                sample_count += 1
+                time.sleep(0.5)
+                
+        except KeyboardInterrupt:
+            print("\nCollection interrupted by user")
+        finally:
+            self.recording = False
+            elapsed = time.monotonic() - self.test_start_time
+            print(f"Collection complete. Duration: {elapsed:.1f}s, Samples: {sample_count}")
+
+    def collect_data_DYNAMIC(self, duration_sec=0, max_samples=0):
+        """Collect data from thermocouples only for DYNAMIC tests"""
+        if not any(tc[1] for tc in self.thermocouples):
+            print("No thermocouples initialized!")
+            return
+            
+        self.recording = True
+        self.test_start_time = time.monotonic()
+        sample_count = 0
+        
+        try:
+            while self.recording:
+                current_time = time.monotonic()
+                elapsed = current_time - self.test_start_time
+                
+                if (duration_sec > 0 and elapsed >= duration_sec) or (max_samples > 0 and sample_count >= max_samples):
+                    break
+                
+                # Read thermocouples only
+                temp_readings = []
+                for idx, (mux_ch, tc) in enumerate(self.thermocouples):
+                    if tc is not None:
+                        try:
+                            temp = tc.temperature
+                            self.rec_temp[idx].append(temp)
+                            self.rec_time[idx].append(elapsed)
+                        except Exception as e:
+                            temp = None
+                            self.rec_temp[idx].append(None)
+                            self.rec_time[idx].append(elapsed)
+                            print(f"[{self._format_timestamp(elapsed)}] Thermocouple CH{mux_ch} error: {e}")
+                    else:
+                        temp = None
+                        self.rec_temp[idx].append(None)
+                        self.rec_time[idx].append(elapsed)
+                    temp_readings.append((mux_ch, temp))
+                
+                # Print readings
+                print(f"[{self._format_timestamp(elapsed)}] ", end='')
+                for ch, temp in temp_readings:
+                    print(f"T{ch}={temp}°C " if temp is not None else f"T{ch}=X ", end='')
+                print()
+                
+                sample_count += 1
+                time.sleep(0.5)
+                
+        except KeyboardInterrupt:
+            print("\nCollection interrupted by user")
+        finally:
+            self.recording = False
+            elapsed = time.monotonic() - self.test_start_time
+            print(f"Collection complete. Duration: {elapsed:.1f}s, Samples: {sample_count}")
+
+    def get_data_static(self):
+        """Return recorded data for static testsas (temperatures, flows, timestamps) tuple"""
+        return (self.rec_temp, self.rec_flow, self.rec_time)
+    
+    def get_data_DYNAMIC(self):
+        """Return recorded data for DYNAMIC tests as (temperatures, timestamps) tuple"""
+        return (self.rec_temp, self.rec_time)
+
+    def clear_data(self):
+        """Clear all stored data and reset test timer"""
+        num_temp_sensors = len(self.thermocouple_config)
+        num_flow_sensors = len(self.flow_sensor_config)
+        self.rec_temp = [[] for _ in range(num_temp_sensors)]
+        self.rec_flow = [[] for _ in range(num_flow_sensors)]
+        self.rec_time = [[] for _ in range(max(num_temp_sensors, num_flow_sensors))]
+        self.test_start_time = None
+
+"Space to add the "
+
+
+
+
+def ledscpt(): 
+    
+    while True:
+                # Always read the current state of the switches
+        state1 = GPIO.input(SWITCH_PIN_1)
+        state2 = GPIO.input(SWITCH_PIN_2)
+        if KVEBench.current_state  == State.IDLE: # IDLE State LED Script, It just makes all LED ON
+            print("LEDs are ON in IDLE state" ,end='\r')
+        if KVEBench.current_state  == State.IDLE:    # IDLE State LED Script, It just makes all LED ON
+                LED1.on() #PRECHECK LED
+                LED2.on() #RUNNING STATIC LED
+                LED3.on() #RUNNING DYNAMIC LED
+                LED4.on()   #ERROR LED
+                  
+                time.sleep(1)
+                
+                
+
+
+        if KVEBench.current_state  == State.PRECHECK_DYNAMIC or KVEBench.current_state == State.PRECHECK_STATIC: # PRECHECK State LED Script, It just makes LED2 blink
+            
+            print("All LEDS ARE OFF")
+            #Turn off all LEDs before starting the PRECHECK state
+            LED1.off() #PRECHECK LED
+            LED2.off() #RUNNING STATIC LED
+            LED3.off() #RUNNING DYNAMIC LED
+            LED4.off()   #ERROR LED
+            print("LEDs are ON in PRECHECK state")  
+
+
+            while KVEBench.current_state  == State.PRECHECK_DYNAMIC or KVEBench.current_state == State.PRECHECK_STATIC: # It will blink LED2 it will also set a variable that will decide what LED 
+                                                                                    # set if the next LED is blue or white for the static or DYNAMIC running mode
+                            
+                LED1.off()
+                time.sleep(0.2)
+                LED1.on()
+                time.sleep(0.2)  
+                
+                
+                
+        if KVEBench.current_state  == State.RUNNING : # RUNNING State LED Script, It just makes LED2 or 3 Blink during static or dinamic test
+            while KVEBench.current_state == State.RUNNING and state1 and not state2:
+
+                LED2.off()
+                time.sleep(0.2)
+                LED2.on()
+                time.sleep(0.2)  
+            while KVEBench.current_state == State.RUNNING and state2 and not state1:
+
+                LED3.off()
+                time.sleep(0.2)
+                LED3.on()           
+                time.sleep(0.2)
+
+        
+
+        if KVEBench.current_state  == State.COMPLETED: # COMPLETED State LED Script, It just makes LED1 ON
+            while KVEBench.current_state == State.COMPLETED:
+                if KVEBench.current_state  == State.COMPLETED and state1 and not state2: # COMPLETED State LED Script, It just makes LED2 on during static test
+                    while KVEBench.current_state == State.COMPLETED:
+
+                        LED2.on()
+
+                if KVEBench.current_state  == State.COMPLETED and state2 and not state1: # COMPLETED State LED Script, It just makes LED3 on after DYNAMIC test 
+                    while KVEBench.current_state == State.COMPLETED:
+
+                        LED3.on()
+        if KVEBench.current_state == State.ERROR: # ERROR State LED Script, It just makes LED4 blink
+            while KVEBench.current_state == State.ERROR:
+                LED4.on()
+                time.sleep(0.2)
+                LED4.off()
+                time.sleep(0.2)
+                print("LEDs are ON in ERROR state")
+
+"TEMPERATURE CONTROL CLASS"
+
+class TemperatureController:
+    def __init__(self, thermocouple_logger, fan_pin, heater_pin, heater_fan_pin):
+        """
+        Initialize the temperature controller.
+        
+        Args:
+            thermocouple_logger: Instance of MultiplexedThermocoupleLogger
+            fan_pin: GPIO pin for controlling fans (via optocoupler)
+            heater_pin: GPIO pin for controlling heater (via optocoupler)
+            heater_fan_pin: GPIO pin for controlling heater's integrated fan
+        """
+        self.logger = thermocouple_logger
+        self.fan_pin = fan_pin
+        self.heater_pin = heater_pin
+        self.heater_fan_pin = heater_fan_pin
+        
+        # Setup GPIO pins
+        GPIO.setup(self.fan_pin, GPIO.OUT)
+        GPIO.setup(self.heater_pin, GPIO.OUT)
+        GPIO.setup(self.heater_fan_pin, GPIO.OUT)
+        
+        # Initialize all outputs to off
+        GPIO.output(self.fan_pin, GPIO.LOW)
+        GPIO.output(self.heater_pin, GPIO.LOW)
+        GPIO.output(self.heater_fan_pin, GPIO.LOW)
+        
+        # Temperature thresholds
+        self.desired_min = 15.0  # Default minimum temperature (°C)
+        self.desired_max = 17.0  # Default maximum temperature (°C)
+        self.hysteresis = 1.0    # Hysteresis to prevent rapid switching
+
+    def set_temperature_range(self, min_temp, max_temp, hysteresis=1.0):
+        """Set the desired temperature range and hysteresis"""
+        self.desired_min = min_temp
+        self.desired_max = max_temp
+        self.hysteresis = hysteresis
+        
+    def get_average_temperature(self):
+        """Get the average temperature from all active thermocouples"""
+        temps = []
+        for i, (channel, tc) in enumerate(self.logger.thermocouples):
+            if tc is not None:
+                try:
+                    temp = tc.temperature
+                    if temp is not None:
+                        temps.append(temp)
+                except OSError:
+                    continue
+        return sum(temps)/len(temps) if temps else None
+    
+    def control_temperature(self):
+        """Main temperature control loop following the block diagram logic"""
+        avg_temp = self.get_average_temperature()
+        if avg_temp is None:
+            print("Error: Could not read temperature from any thermocouple")
+            return False
+        
+        # Check if temperature is in desired range
+        if self.desired_min <= avg_temp <= self.desired_max:
+            print(f"Temperature {avg_temp}°C is in desired range")
+            # Turn off both systems
+            self._turn_off_fans()
+            self._turn_off_heater()
+            
+            # Check if stabilized (stays in range for some time)
+            stabilized = self._check_stabilization()
+            if stabilized:
+                return True
+            return False
+        
+        # Temperature is outside desired range
+        elif avg_temp > self.desired_max + self.hysteresis:
+            print(f"Temperature {avg_temp}°C is too high - cooling")
+            self._turn_off_heater()
+            self._turn_on_fans()
+            
+            
+        elif avg_temp < self.desired_min - self.hysteresis:
+            print(f"Temperature {avg_temp}°C is too low - heating")
+            self._turn_off_fans()
+            self._turn_on_heater()
+            
+        return False
+        
+    def _turn_on_fans(self):
+        """Turn on the cooling fans"""
+        GPIO.output(self.fan_pin, GPIO.HIGH)
+        GPIO.output(self.heater_fan_pin, GPIO.HIGH)
+        
+    def _turn_off_fans(self):
+        """Turn off the cooling fans"""
+        GPIO.output(self.fan_pin, GPIO.LOW)
+        GPIO.output(self.heater_fan_pin, GPIO.LOW)
+        
+    def _turn_on_heater(self):
+        """Turn on the heater and its integrated fan"""
+        GPIO.output(self.heater_pin, GPIO.HIGH)
+        GPIO.output(self.heater_fan_pin, GPIO.HIGH)
+        
+    def _turn_off_heater(self):
+        """Turn off the heater and its integrated fan"""
+        GPIO.output(self.heater_pin, GPIO.LOW)
+        GPIO.output(self.heater_fan_pin, GPIO.LOW)
+        
+    def _check_stabilization(self, check_duration=5, check_interval=1):
+        """
+        Check if temperature stays in desired range for specified duration
+        
+        Args:
+            check_duration: Total time to monitor (seconds)
+            check_interval: Time between checks (seconds)
+        """
+        start_time = time.time()
+        while time.time() - start_time < check_duration:
+            avg_temp = self.get_average_temperature()
+            if avg_temp is None:
+                return False
+                
+            if not (self.desired_min <= avg_temp <= self.desired_max):
+                return False
+                
+            time.sleep(check_interval)
+            
+        return True
+
+    def cleanup(self):
+        """Clean up resources and ensure all outputs are off"""
+        self._turn_off_fans()
+        self._turn_off_heater()
+
+"""Logger Writer Class"""        
+
+class SDWriter:
+    def __init__(self, base_path="/mnt/sdcard"):
+        self.base_path = base_path
+        
+    def _generate_filename(self):
+        """Generate timestamped filename"""
+        return datetime.now().strftime("test_%Y%m%d_%H%M%S.csv")
+    
+    def _prepare_header(self, num_thermocouples, num_flow_sensors):
+        """Generate CSV header based on sensor configuration"""
+        header = ["timestamp"]
+        header.extend([f"thermocouple_{i+1}" for i in range(num_thermocouples)])
+        if num_flow_sensors > 0:
+            header.extend([f"flow_{i+1}" for i in range(num_flow_sensors)])
+        return header
+    
+    def _prepare_row(self, timestamp, temp_readings, flow_readings):
+        """Format one row of data"""
+        row = [f"{timestamp:.3f}"]  # Format timestamp to 3 decimal places
+        row.extend([f"{temp:.1f}" if temp is not None else "" for temp in temp_readings])
+        if flow_readings:
+            row.extend([f"{flow:.2f}" if flow is not None else "" for flow in flow_readings])
+        return row
+    
+    def write_to_csv(self, timestamps, temperatures, flows=None):
+        """
+        Write collected data to CSV file on SD card
+        Args:
+            timestamps: List of lists of timestamps (one per sensor)
+            temperatures: List of lists of temperature readings
+            flows: Optional list of lists of flow readings (for static tests)
+        """
+        filepath = f"{self.base_path}/{self._generate_filename()}"
+        
+        num_thermocouples = len(temperatures)
+        num_flow_sensors = len(flows) if flows else 0
+        
+        try:
+            with open(filepath, 'w', newline='') as csvfile:
+                writer = csv.writer(csvfile)
+                
+                # Write header
+                writer.writerow(self._prepare_header(num_thermocouples, num_flow_sensors))
+                
+                # Write data rows
+                num_samples = len(timestamps[0])  # Assuming all have same length
+                for i in range(num_samples):
+                    # Get all sensor readings for this timestamp
+                    temp_readings = [t[i] if i < len(t) else None for t in temperatures]
+                    flow_readings = [f[i] for f in flows] if flows else None
+                    
+                    # Use first sensor's timestamp (assuming synchronized)
+                    timestamp = timestamps[0][i] if timestamps else 0
+                    
+                    writer.writerow(self._prepare_row(timestamp, temp_readings, flow_readings))
+            
+            print(f"Successfully wrote {num_samples} samples to {filepath}")
+            return True
+            
+        except Exception as e:
+            print(f"Failed to write CSV: {str(e)}")
+            return False
+
+"State Machine States Class"
+
+class State:
+    """
+    Enumeration of possible states for the calibration bench.
+    """
+    IDLE = "IDLE"
+    PRECHECK_DYNAMIC = "PRECHECK"
+    PRECHECK_STATIC = "PRECHECK_STATIC"
+    RUNNING = "RUNNING"
+    COMPLETED = "COMPLETED"
+    ERROR = "ERROR"        
+
+"State Machine Class"
+class StateMachine:
+    """
+    State machine implementation for the Inductive Coil Calibration Bench.
+    
+    This class manages state transitions and associated actions for the
+    calibration bench system.
+    """
+    
+    def __init__(self):
+        """
+        Initialize the state machine in IDLE state.
+        """
+        self.current_state = None
+        self.previous_state = None
+        self.error_message = None
+        
+        self.collected_temperatures = None
+        self.collected_timestamps = None
+        self.collected_flow = None
+        # Define valid state transitions
+        self.valid_transitions = {
+            State.IDLE: [State.PRECHECK_DYNAMIC,State.PRECHECK_STATIC, State.ERROR],
+            State.PRECHECK_STATIC: [State.RUNNING, State.IDLE, State.ERROR],
+            State.PRECHECK_DYNAMIC: [State.RUNNING, State.IDLE, State.ERROR],
+            State.RUNNING: [State.COMPLETED, State.ERROR, State.IDLE],
+            State.COMPLETED: [State.IDLE, State.ERROR],
+            State.ERROR: [State.IDLE]
+        }
+        
+        # Initialize state entry and exit actions
+        self._setup_state_actions()
+    
+    def _setup_state_actions(self):
+        """
+        Set up actions to be performed on state entry and exit.
+        """
+        # State entry actions
+        self.state_entry_actions = {
+            State.IDLE: self._on_enter_idle,
+            State.PRECHECK_DYNAMIC: self._on_enter_precheck_DYNAMIC,
+            State.PRECHECK_STATIC: self._on_enter_precheck_static,
+            State.RUNNING: self._on_enter_running,
+            State.COMPLETED: self._on_enter_completed,
+            State.ERROR: self._on_enter_error
+        }
+        
+        # State exit actions
+        self.state_exit_actions = {
+            State.IDLE: self._on_exit_idle,
+            State.PRECHECK_DYNAMIC: self._on_exit_precheck_DYNAMIC,
+            State.PRECHECK_STATIC: self._on_exit_precheck_static,
+            State.RUNNING: self._on_exit_running,
+            State.COMPLETED: self._on_exit_completed,
+            State.ERROR: self._on_exit_error
+        }
+    
+    def transition_to(self, new_state, error_message=None):
+        """
+        Transition to a new state if the transition is valid.
+        
+        Args:
+            new_state (str): The state to transition to
+            error_message (str, optional): Error message if transitioning to ERROR state
+            
+        Returns:
+            bool: True if transition was successful, False otherwise
+        """
+        # Check if transition is valid
+        if new_state not in self.valid_transitions[self.current_state]:
+            print(f"Invalid state transition: {self.current_state} -> {new_state}")
+            return False
+        
+        # Execute exit action for current state
+        self.state_exit_actions[self.current_state]()
+        
+        # Update state
+        self.previous_state = self.current_state
+        self.current_state = new_state
+        
+        # Set error message if transitioning to ERROR state
+        if new_state == State.ERROR:
+            self.error_message = error_message or "Unknown error"
+        
+        # Execute entry action for new state
+        self.state_entry_actions[self.current_state]()
+        
+        print(f"State transition: {self.previous_state} -> {self.current_state}")
+        return True
+    
+    def get_current_state(self):
+        """
+        Get the current state.
+        
+        Returns:
+            str: Current state
+        """
+        return self.current_state
+    
+    def get_error_message(self):
+        """
+        Get the current error message.
+        
+        Returns:
+            str: Current error message or None if not in ERROR state
+        """
+        if self.current_state == State.ERROR:
+            return self.error_message
+        return None
+    
+    """The following methods are the state entry and exit actions for each state.
+    These methods are the ones we are gonna use to control the LEDs.
+    This will save us from having to write the same code over and over again."""
+    
+    # State entry actions
+    def _on_enter_idle(self):
+        #Actions to perform when entering IDLE state.
+        print("Entering IDLE state: System in standby mode")
+        # Turn on all tower lights
+        # Reset error message
+        self.error_message = None
+
+    def _on_enter_precheck_DYNAMIC(self):
+        """Actions to perform when entering PRECHECK state."""
+        print("Entering PRECHECK DYNAMIC state: Verifying test conditions")
+        # Start blinking GREEN tower light
+        # Begin temperature control
+        #After precheck is done, transition to RUNNING state
+
+    def _on_enter_precheck_static(self):
+        """Actions to perform when entering PRECHECK state."""
+        print("Entering PRECHECK STATIC state: Verifying test conditions")
+        # Start blinking GREEN tower light
+        # Begin temperature control
+        #After precheck is done, transition to RUNNING state            
+        
+    
+    def _on_enter_running(self):
+        """Actions to perform when entering RUNNING state."""
+        print("Entering RUNNING state: Test in progress")
+        # Set GREEN tower light
+        # Start data reading
+        # After test is done, transition to COMPLETED state
+        
+        # After test is done, transition to COMPLETED state
+    
+    def _on_enter_completed(self):
+        """Actions to perform when entering COMPLETED state."""
+        print("Entering COMPLETED state: Test finished successfully")
+        # Set BLUE/WHITE tower light
+        # Finalize data reading
+        # Save data to file
+        # After saving data, transition to IDLE state
+        
+        # After saving data, transition to IDLE state
+    
+    def _on_enter_error(self):
+        """Actions to perform when entering ERROR state."""
+        print(f"Entering ERROR state: {self.error_message}")
+        # Set RED tower light
+        # Log error
+    
+    # State exit actions
+    def _on_exit_idle(self):
+        """Actions to perform when exiting IDLE state."""
+        print("Exiting IDLE state")
+        # Turn off all tower lights
+    
+    def _on_exit_precheck_DYNAMIC(self):
+        """Actions to perform when exiting PRECHECK state."""
+        print("Exiting PRECHECK DYNAMIC state")
+        # Stop blinking GREEN tower light
+
+    def _on_exit_precheck_static(self):
+        """Actions to perform when exiting PRECHECK state."""
+        print("Exiting PRECHECK STATIC state")
+        # Stop blinking GREEN tower light    
+    def _on_exit_running(self):
+        """Actions to perform when exiting RUNNING state."""
+        print("Exiting RUNNING state")
+        # Turn off GREEN tower light
+    
+    def _on_exit_completed(self):
+        """Actions to perform when exiting COMPLETED state."""
+        print("Exiting COMPLETED state")
+        # Turn off BLUE/WHITE tower light
+    
+    def _on_exit_error(self):
+        """Actions to perform when exiting ERROR state."""
+        print("Exiting ERROR state")
+        # Turn off RED tower light
+    def run(self):
+
+        "SCRIPT TOO CONTROL THE BLINKING OF THE BUTTON LED"
+
+        def button_led():
+            """Thread function to control the button LED"""
+            while True:
+                if KVEBench.current_state!= State.IDLE:
+                    bLED.on()  # Turn on error LED when button is pressed
+                    time.sleep(0.5)
+                    bLED.off()
+                    time.sleep(0.5)
+
+        
+        """Main loop for the state machine"""
+        self.current_state = State.IDLE  # Initialize to IDLE state
+        
+        ledthr = threading.Thread(target=ledscpt) # LED control thread
+
+        bledthr = threading.Thread(target=button_led)  # Button LED control thread
+        
+        bledthr.start()  # Start the button LED control thread
+        ledthr.start()  # Start the LED control thread        
+        logger = MultiplexedThermocoupleLogger() #specific object to control thermocouples
+      
+        #logtemp = TemperatureController(logger, fan_pin=[13], heater_pin=[19], heater_fan_pin=[26]) #specific object to control the temperature control
+        #logtemp.set_temperature_range(29.0, 31.0, hysteresis=1.0)
+
+
+        # Add thermocouples add flow sensors to the logger
+        logger.add_flow_sensor(4, 0x48, 0)  # Channel 4 Channel ADS 0
+        logger.add_thermocouple(0, 0x66)  # Channel 0
+        logger.add_thermocouple(1, 0x67)  # Channel 1
+        logger.add_thermocouple(2, 0x66)  # Channel 2
+
+        # Button press handler for interrupts
+        def handle_button_press():
+            nonlocal logger
+            if self.current_state in [State.PRECHECK_DYNAMIC, State.PRECHECK_STATIC, State.RUNNING, State.COMPLETED]:
+                print("\nButton pressed - interrupting current operation")
+                logger.recording = False  # Stop any ongoing data collection
+                self.transition_to(State.IDLE)
+        
+        # Setup button callback
+        button.when_pressed = handle_button_press
+
+        # SD Card Writer object
+        sd_writer = SDWriter()
+
+        while True:
+           
+        
+
+        
+            if self.current_state == State.IDLE:
+                time.sleep(2)  # Prevent busy-waiting
+
+                print("System in IDLE state, waiting for mode selection...")
+                
+                logger.initialize_hardware_DYNAMIC()
+                logtemp = TemperatureController(logger, fan_pin=17, heater_pin=27, heater_fan_pin=22)  # Initialize temperature controller
+                while not logtemp.control_temperature() :  
+                    print("Controlling temperature...")
+                    time.sleep(1)
+               
+                    
+                while self.current_state == State.IDLE:
+                    state1 = GPIO.input(SWITCH_PIN_1)
+                    state2 = GPIO.input(SWITCH_PIN_2)
+                    
+                    if state1 and not state2:
+                        print("Static mode selected", end='\r')
+                        if button.is_pressed:
+                            time.sleep(0.3)  # Debounce
+                            self.transition_to(State.PRECHECK_STATIC)
+                    elif state2 and not state1:
+                        print("DYNAMIC mode selected", end='\r')
+                        if button.is_pressed:
+                            time.sleep(0.3)  # Debounce
+                            self.transition_to(State.PRECHECK_DYNAMIC)
+                    else:
+                        print("No mode selected", end='\r')
+
+            elif self.current_state == State.PRECHECK_DYNAMIC:
+                print("Starting DYNAMIC precheck...")
+                if not logger.initialize_hardware_DYNAMIC():
+                    self.transition_to(State.ERROR, "Hardware initialization failed")
+                    continue
+                time.sleep(2)  # 
+                if self.current_state == State.PRECHECK_DYNAMIC:  # Only transition if not interrupted
+                    self.transition_to(State.RUNNING)
+
+            elif self.current_state == State.PRECHECK_STATIC:
+                print("Starting static precheck...")
+                if not logger.initialize_hardware_static():
+                    self.transition_to(State.ERROR, "Hardware initialization failed")
+                    continue
+                time.sleep(2)  # Allow time for precheck
+                
+                if self.current_state == State.PRECHECK_STATIC:  # Only transition if not interrupted
+                    self.transition_to(State.RUNNING)
+
+            elif self.current_state == State.RUNNING:
+                print("Starting test run...")
+                if state1 and not state2:
+                    logger.collect_data_static(duration_sec=10, max_samples=100)
+                if state2 and not state1:
+                    logger.collect_data_DYNAMIC(duration_sec=10, max_samples=100)
+                if self.current_state == State.RUNNING:  # Only proceed if not interrupted
+                    if state1 and not state2:
+                        self.collected_temperatures, self.collected_flow, self.collected_timestamps = logger.get_data_static()
+                        print("Test data collected successfully")
+                        self.transition_to(State.COMPLETED)
+                    if state2 and not state1:                                                  # Dont Know wtf this did
+                        self.collected_temperatures, self.collected_timestamps = logger.get_data_DYNAMIC()
+                        self.collected_flow = None                    #Gotta check why temperature and timestamps was collectd from get data
+                        print("Test data collected successfully")
+                        self.transition_to(State.COMPLETED)  
+
+            elif self.current_state == State.COMPLETED:
+                if state1 and not state2:  # Static test
+                    success = sd_writer.write_to_csv(
+                        timestamps=self.collected_timestamps,
+                        temperatures=self.collected_temperatures,
+                        flows=self.collected_flow,
+                        test_type="static"  # Explicitly declared
+                    )
+                elif state2 and not state1:  # Dynamic test
+                    success = sd_writer.write_to_csv(
+                        timestamps=self.collected_timestamps,
+                        temperatures=self.collected_temperatures,
+                        flows=None,  # Explicitly no flow data
+                        test_type="dynamic"  # Explicitly declared
+                    )
+                else:
+                    print("Error: Invalid test mode state")
+                    success = False
+
+                if success:
+                    logger.clear_data()
+                    self.transition_to(State.IDLE)
+                else:
+                    self.transition_to(State.ERROR)
+                print("Test completed successfully")
+                print("Collected results:")
+                print("Temperatures:", self.collected_temperatures)
+                print("Timestamps:", self.collected_timestamps)
+                print("Flow:", self.collected_flow)
+                for i in range(3):  # Brief completion indication
+                    if self.current_state != State.COMPLETED:  # Check if interrupted
+                        break
+                    time.sleep(0.5)
+                
+                if self.current_state == State.COMPLETED:  # Only transition if not interrupted
+                    logger.clear_data()
+                    self.transition_to(State.IDLE)
+                    
+
+
+            elif self.current_state == State.ERROR:
+                print(f"Error: {self.get_error_message()}")
+                time.sleep(2)  # Show error for 2 seconds
+                self.transition_to(State.IDLE)
+
+KVEBench = StateMachine()
+KVEBench.run()  # Start the state machine
