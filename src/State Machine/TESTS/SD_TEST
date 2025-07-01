@@ -51,6 +51,8 @@ from adafruit_ads1x15.analog_in import AnalogIn
 import threading
 #Logging Libraries
 import csv
+# Set up GPIO mode
+GPIO.setmode(GPIO.BCM)
 
 # Pins for switch
 
