@@ -1,0 +1,131 @@
+# HAD TO take this out
+
+class TemperatureController:
+    def __init__(self, thermocouple_logger, fan_pin, heater_pin, heater_fan_pin):
+        """
+        Initialize the temperature controller.
+        
+        Args:
+            thermocouple_logger: Instance of MultiplexedThermocoupleLogger
+            fan_pin: GPIO pin for controlling fans (via optocoupler)
+            heater_pin: GPIO pin for controlling heater (via optocoupler)
+            heater_fan_pin: GPIO pin for controlling heater's integrated fan
+        """
+        self.logger = thermocouple_logger
+        self.fan_pin = fan_pin
+        self.heater_pin = heater_pin
+        self.heater_fan_pin = heater_fan_pin
+        
+        # Setup GPIO pins
+        GPIO.setup(self.fan_pin, GPIO.OUT)
+        GPIO.setup(self.heater_pin, GPIO.OUT)
+        GPIO.setup(self.heater_fan_pin, GPIO.OUT)
+        
+        # Initialize all outputs to off
+        GPIO.output(self.fan_pin, GPIO.LOW)
+        GPIO.output(self.heater_pin, GPIO.LOW)
+        GPIO.output(self.heater_fan_pin, GPIO.LOW)
+        
+        # Temperature thresholds
+        self.desired_min = 15.0  # Default minimum temperature (°C)
+        self.desired_max = 17.0  # Default maximum temperature (°C)
+        self.hysteresis = 1.0    # Hysteresis to prevent rapid switching
+
+    def set_temperature_range(self, min_temp, max_temp, hysteresis=1.0):
+        """Set the desired temperature range and hysteresis"""
+        self.desired_min = min_temp
+        self.desired_max = max_temp
+        self.hysteresis = hysteresis
+        
+    def get_average_temperature(self):
+        """Get the average temperature from all active thermocouples"""
+        temps = []
+        for i, (channel, tc) in enumerate(self.logger.thermocouples):
+            if tc is not None:
+                try:
+                    temp = tc.temperature
+                    if temp is not None:
+                        temps.append(temp)
+                except OSError:
+                    continue
+        return sum(temps)/len(temps) if temps else None
+    
+    def control_temperature(self):
+        """Main temperature control loop following the block diagram logic"""
+        avg_temp = self.get_average_temperature()
+        if avg_temp is None:
+            print("Error: Could not read temperature from any thermocouple")
+            return False
+        
+        # Check if temperature is in desired range
+        if self.desired_min <= avg_temp <= self.desired_max:
+            print(f"Temperature {avg_temp}°C is in desired range")
+            # Turn off both systems
+            self._turn_off_fans()
+            self._turn_off_heater()
+            
+            # Check if stabilized (stays in range for some time)
+            stabilized = self._check_stabilization()
+            if stabilized:
+                return True
+            return False
+        
+        # Temperature is outside desired range
+        elif avg_temp > self.desired_max + self.hysteresis:
+            print(f"Temperature {avg_temp}°C is too high - cooling")
+            self._turn_off_heater()
+            self._turn_on_fans()
+            
+            
+        elif avg_temp < self.desired_min - self.hysteresis:
+            print(f"Temperature {avg_temp}°C is too low - heating")
+            self._turn_off_fans()
+            self._turn_on_heater()
+            
+        return False
+        
+    def _turn_on_fans(self):
+        """Turn on the cooling fans"""
+        GPIO.output(self.fan_pin, GPIO.HIGH)
+        GPIO.output(self.heater_fan_pin, GPIO.HIGH)
+        
+    def _turn_off_fans(self):
+        """Turn off the cooling fans"""
+        GPIO.output(self.fan_pin, GPIO.LOW)
+        GPIO.output(self.heater_fan_pin, GPIO.LOW)
+        
+    def _turn_on_heater(self):
+        """Turn on the heater and its integrated fan"""
+        GPIO.output(self.heater_pin, GPIO.HIGH)
+        GPIO.output(self.heater_fan_pin, GPIO.HIGH)
+        
+    def _turn_off_heater(self):
+        """Turn off the heater and its integrated fan"""
+        GPIO.output(self.heater_pin, GPIO.LOW)
+        GPIO.output(self.heater_fan_pin, GPIO.LOW)
+        
+    def _check_stabilization(self, check_duration=5, check_interval=1):
+        """
+        Check if temperature stays in desired range for specified duration
+        
+        Args:
+            check_duration: Total time to monitor (seconds)
+            check_interval: Time between checks (seconds)
+        """
+        start_time = time.time()
+        while time.time() - start_time < check_duration:
+            avg_temp = self.get_average_temperature()
+            if avg_temp is None:
+                return False
+                
+            if not (self.desired_min <= avg_temp <= self.desired_max):
+                return False
+                
+            time.sleep(check_interval)
+            
+        return True
+
+    def cleanup(self):
+        """Clean up resources and ensure all outputs are off"""
+        self._turn_off_fans()
+        self._turn_off_heater()
