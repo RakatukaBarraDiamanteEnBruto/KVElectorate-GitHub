@@ -967,14 +967,14 @@ class StateMachine:
                         timestamps=self.collected_timestamps,
                         temperatures=self.collected_temperatures,
                         flows=self.collected_flow,
-                        test_type="static"  # Explicitly declared
+                        
                     )
                 elif state2 and not state1:  # Dynamic test
                     success = sd_writer.write_to_csv(
                         timestamps=self.collected_timestamps,
                         temperatures=self.collected_temperatures,
                         flows=None,  # Explicitly no flow data
-                        test_type="dynamic"  # Explicitly declared
+                        
                     )
                 else:
                     print("Error: Invalid test mode state")
