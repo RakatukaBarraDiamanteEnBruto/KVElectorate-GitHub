@@ -721,6 +721,8 @@ class StateMachine:
                     time.sleep(0.5)
                     bLED.off()
                     time.sleep(0.5)
+                else:
+                    bLED.on()
 
         
         """Main loop for the state machine"""
