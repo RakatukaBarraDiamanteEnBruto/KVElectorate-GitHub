@@ -391,13 +391,13 @@ def ledscpt():
             print("LEDs are ON in PRECHECK state")  
 
 
-            while KVEBench.current_state  == State.PRECHECK_DYNAMIC or KVEBench.current_state == State.PRECHECK_STATIC: # It will blink LED2 it will also set a variable that will decide what LED 
-                                                                                    # set if the next LED is blue or white for the static or DYNAMIC running mode
-                            
-                LED1.off()
-                time.sleep(0.4)
-                LED1.on()
-                time.sleep(0.4)  
+        while KVEBench.current_state  == State.PRECHECK_DYNAMIC or KVEBench.current_state == State.PRECHECK_STATIC: # It will blink LED2 it will also set a variable that will decide what LED 
+                                                                                # set if the next LED is blue or white for the static or DYNAMIC running mode
+                        
+            LED1.off()
+            time.sleep(0.4)
+            LED1.on()
+            time.sleep(0.4)  
                 
                 
                 
