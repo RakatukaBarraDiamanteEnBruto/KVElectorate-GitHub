@@ -34,29 +34,14 @@ For the data logger. Look into how to access the data from temperatures, timesta
 #Time Libraries
 import time
 from datetime import timedelta
+from datetime import datetime
 #I2C and GPIO Led and button Libraries
 import board
 import busio
-try:
-    import RPi.GPIO as GPIO
-except ModuleNotFoundError:
-    from unittest import mock
-    GPIO = mock.MagicMock()
-try:
-    import gpiozero
-except ModuleNotFoundError:
-    from unittest import mock
-    gpiozero = mock.MagicMock()
-try:
-    from gpiozero import Button
-except (ModuleNotFoundError, ImportError):
-    from unittest.mock import MagicMock
-    Button = MagicMock()
-try:
-    from gpiozero import LED
-except (ModuleNotFoundError, ImportError):
-    from unittest.mock import MagicMock
-    LED = MagicMock()
+import RPi.GPIO as GPIO
+import gpiozero
+from gpiozero import Button
+from gpiozero import LED
 #Sensor Libraries        
 import adafruit_tca9548a
 from adafruit_mcp9600 import MCP9600
@@ -64,7 +49,8 @@ import adafruit_ads1x15.ads1115 as ADS
 from adafruit_ads1x15.analog_in import AnalogIn
 #Threading Libraries
 import threading
-
+#Logging Libraries
+import csv
 # Set up GPIO mode
 GPIO.setmode(GPIO.BCM)
 
