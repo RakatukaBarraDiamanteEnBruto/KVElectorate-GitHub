@@ -8,7 +8,7 @@ from datetime import datetime
 import os
 
 class SDWriter:
-    def __init__(self, base_path="/media/rpi_kve/32 GB Volume/Tests"):
+    def __init__(self, base_path="/home/rpi_kve/Desktop"):
         # Create directory if it doesn't exist
         os.makedirs(base_path, exist_ok=True)
         self.base_path = base_path
