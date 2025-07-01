@@ -395,9 +395,9 @@ def ledscpt():
                                                                                     # set if the next LED is blue or white for the static or DYNAMIC running mode
                             
                 LED1.off()
-                time.sleep(0.2)
+                time.sleep(0.4)
                 LED1.on()
-                time.sleep(0.2)  
+                time.sleep(0.4)  
                 
                 
                 
