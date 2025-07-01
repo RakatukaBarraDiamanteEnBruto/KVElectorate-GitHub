@@ -18,15 +18,15 @@ Features Implemented:
 -Temp Control
 - Button led control for visual feedback
 
-Missing Features:
+To be Tested Features:
 - Data logging to a file or database
 
 NOTES:
-All feauters implemented works as intended, except temperature control which hasnt been tested yet.
+All feauters implemented works as intended, except for the data logger.
 
+Needs to be tested within the test bench still
 Once tested push to prepod
 
-For the data logger. Look into how to access the data from temperatures, timestamps, flow  variables. Line 885, 889
 
 """
 
@@ -56,8 +56,8 @@ GPIO.setmode(GPIO.BCM)
 
 # Pins for switch
 
-SWITCH_PIN_1 = 23  # Change to your first GPIO pin
-SWITCH_PIN_2 = 24  # Change to your second GPIO pin
+SWITCH_PIN_1 = 19  # Change to your first GPIO pin
+SWITCH_PIN_2 = 26  # Change to your second GPIO pin
 
 # Set up the pins as inputs with pull-down resistors
 GPIO.setup(SWITCH_PIN_1, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
@@ -74,8 +74,8 @@ LED4 = LED(21)  # ERRROR Led
 
 
 #PINS for button
-button = Button(18) # com cable to GPIO 18, NO  to GND
-bLED = LED(14)  # Button LED Gotta check if this pin is free
+button = Button(5) # com cable to GPIO 18, NO  to GND
+bLED = LED(13)  # Button LED Gotta check if this pin is free
 
 
 "THERMOCOUPLE CONTROLLER OBJECT"
@@ -571,7 +571,7 @@ class TemperatureController:
 """Logger Writer Class"""        
 
 class SDWriter:
-    def __init__(self, base_path="/mnt/sdcard"):
+    def __init__(self, base_path="/media/rpi_kve/6465-3238/Tests"):
         self.base_path = base_path
         
     def _generate_filename(self):
@@ -867,11 +867,14 @@ class StateMachine:
 
 
         # Add thermocouples add flow sensors to the logger
-        logger.add_flow_sensor(4, 0x48, 0)  # Channel 4 Channel ADS 0
         logger.add_thermocouple(0, 0x66)  # Channel 0
         logger.add_thermocouple(1, 0x67)  # Channel 1
         logger.add_thermocouple(2, 0x66)  # Channel 2
-
+        logger.add_thermocouple(3, 0x65)  # Channel 3
+        logger.add_thermocouple(4, 0x66)  # Channel 4
+        logger.add_thermocouple(5, 0x66)  # Channel 5
+        logger.add_thermocouple(6, 0x67)  # Channel 6
+        logger.add_thermocouple(7, 0x67)  # Channel 7
         # Button press handler for interrupts
         def handle_button_press():
             nonlocal logger
