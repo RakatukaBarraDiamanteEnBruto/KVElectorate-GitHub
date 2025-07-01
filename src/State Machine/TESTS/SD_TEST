@@ -368,7 +368,7 @@ def ledscpt():
         state1 = GPIO.input(SWITCH_PIN_1)
         state2 = GPIO.input(SWITCH_PIN_2)
         if KVEBench.current_state  == State.IDLE: # IDLE State LED Script, It just makes all LED ON
-            print("LEDs are ON in IDLE state" ,end='\r')
+            print("LEDs are ON in IDLE state")
         if KVEBench.current_state  == State.IDLE:    # IDLE State LED Script, It just makes all LED ON
                 LED1.on() #PRECHECK LED
                 LED2.on() #RUNNING STATIC LED
