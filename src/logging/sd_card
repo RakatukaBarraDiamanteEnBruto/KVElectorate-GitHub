@@ -3,47 +3,80 @@
 # Adjust the Measurement class to include all data fields you want to log.
 # Change directory in save_to_csv to your SD card mount point.
 # This script creates a new CSV file for each test, named with the date and time.
-
-
 import csv
-import time 
 from datetime import datetime
+import os
 
-# Example data class for a single measurement
-class Measurement:
-    def __init__(self, timestamp, sensor_value):
-        self.timestamp = timestamp
-        self.sensor_value = sensor_value
+class SDWriter:
+    def __init__(self, base_path="G:\\Tests"):
+        # Create directory if it doesn't exist
+        os.makedirs(base_path, exist_ok=True)
+        self.base_path = base_path
+    
+    def _generate_filename(self, test_type):
+        """Generate filename with test type identification"""
+        return datetime.now().strftime(f"{test_type}_%Y%m%d_%H%M%S.csv")
+    
+    def _prepare_header(self, num_temp_sensors, num_flow_sensors=0):
+        """Create header row based on sensor counts"""
+        header = ["timestamp_sec"]
+        header.extend([f"temp_sensor_{i+1}" for i in range(num_temp_sensors)])
+        if num_flow_sensors > 0:
+            header.extend([f"flow_sensor_{i+1}" for i in range(num_flow_sensors)])
+        return header
+    
+    def _validate_data(self, timestamps, temperatures, flows=None):
+        """Verify data structure matches expected format"""
+        if not all(len(lst) == len(timestamps[0]) for lst in temperatures):
+            raise ValueError("Temperature data length mismatch")
+        if flows is not None and not all(len(lst) == len(timestamps[0]) for lst in flows):
+            raise ValueError("Flow data length mismatch")
+        return True
+    
+    def write_test_data(self, timestamps, temperatures, flows=None, test_type="test"):
+        """
+        Write collected test data to CSV
+        
+        Args:
+            timestamps: List of lists (one per sensor) of timestamps
+            temperatures: List of lists of temperature readings
+            flows: Optional list of lists of flow readings
+            test_type: Prefix for filename (e.g., 'static', 'dynamic')
+        """
+        try:
+            self._validate_data(timestamps, temperatures, flows)
+            
+            filepath = f"{self.base_path}/{self._generate_filename(test_type)}"
+            num_temp = len(temperatures)
+            num_flow = len(flows) if flows else 0
+            print(f"Writing data to {filepath} ")
+            with open(filepath, 'w', newline='') as f:
+                writer = csv.writer(f)
+                
+                # Write header
+                writer.writerow(self._prepare_header(num_temp, num_flow))
+                
+                # Write data rows
+                for i in range(len(timestamps[0])):
+                    row = [f"{timestamps[0][i]:.3f}"]  # Use first sensor's timestamp
+                    row.extend([f"{t[i]:.1f}" if t[i] is not None else "" 
+                               for t in temperatures])
+                    if flows:
+                        row.extend([f"{f[i]:.2f}" if f[i] is not None else "" 
+                                  for f in flows])
+                    writer.writerow(row)
+            
+            print(f"Data saved to {filepath}")
+            return True
+            
+        except Exception as e:
+            print(f"CSV write failed: {str(e)}")
+            return False
+        
 
-# Replace this with your actual sensor reading logic
-def read_sensor():
-    # Example: return a dummy value
-    return 42.0
-
-def run_test(duration_seconds=60, frequency_hz=50):
-    measurements = []
-    interval = 1.0 / frequency_hz
-    start_time = time.time()
-    while (time.time() - start_time) < duration_seconds:
-        timestamp = time.time() - start_time
-        value = read_sensor()
-        measurements.append(Measurement(timestamp, value))
-        time.sleep(interval)
-    return measurements
-
-def save_to_csv(measurements, directory="/mnt/sdcard"):
-    # Create a unique filename with date and time
-    now = datetime.now()
-    filename = now.strftime("test_%Y%m%d_%H%M%S.csv")
-    filepath = f"{directory}/{filename}"
-    with open(filepath, mode='w', newline='') as file:
-        writer = csv.writer(file)
-        writer.writerow(["timestamp", "sensor_value"])
-        for m in measurements:
-            writer.writerow([m.timestamp, m.sensor_value])
-    print(f"Data saved to {filepath}")
-
-if __name__ == "__main__":
-    # Run the test and save results
-    data = run_test()
-    save_to_csv(data)
+SDWriter = SDWriter()
+# Example dummy data for one temperature sensor and no flow sensors
+timestamps = [[0.0, 1.0, 2.0]]  # List of lists, one per sensor
+temperatures = [[25.0, 26.0, 27.0]]  # List of lists, one per sensor
+flows = None  # No flow sensors
+SDWriter.write_test_data( timestamps, temperatures, flows, test_type="test")
