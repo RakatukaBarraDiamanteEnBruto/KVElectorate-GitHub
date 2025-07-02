@@ -15,11 +15,12 @@ Features Implemented:
 - Proper timestamping for temperature readings
 - Button interruption handling for immediate test shutdown
 - Button led control for visual feedback
+- Temp Control
 
 Missing Features:
 - Data logging to a file or database
 - Flow vortex sensor integration
-- Temp Control
+
 
 Other stuff:
 - Cleanup the PRECHECK_DINAMIC and PRECHECK_STATIC states because idk wtf they are doing apart for
