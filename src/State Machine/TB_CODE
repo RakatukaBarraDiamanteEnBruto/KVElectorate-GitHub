@@ -17,14 +17,16 @@ Features Implemented:
 -Flow vortex sensor integration * I need to finish integrating this parts 
 -Temp Control
 - Button led control for visual feedback
+- SD Card Logger
 
-Missing Features:
-- Data logging to a file or database
+To be Tested Features:
+No features left feels good man
 
 NOTES:
 All feauters implemented works as intended
+Needs to be tested within the test bench still
+Once tested push to prepod
 
-For the data logger. Look into how to access the data from temperatures, timestamps, flow  variables. Line 885, 889
 
 """
 
@@ -32,29 +34,14 @@ For the data logger. Look into how to access the data from temperatures, timesta
 #Time Libraries
 import time
 from datetime import timedelta
+from datetime import datetime
 #I2C and GPIO Led and button Libraries
 import board
 import busio
-try:
-    import RPi.GPIO as GPIO
-except ModuleNotFoundError:
-    from unittest import mock
-    GPIO = mock.MagicMock()
-try:
-    import gpiozero
-except ModuleNotFoundError:
-    from unittest import mock
-    gpiozero = mock.MagicMock()
-try:
-    from gpiozero import Button
-except (ModuleNotFoundError, ImportError):
-    from unittest.mock import MagicMock
-    Button = MagicMock()
-try:
-    from gpiozero import LED
-except (ModuleNotFoundError, ImportError):
-    from unittest.mock import MagicMock
-    LED = MagicMock()
+import RPi.GPIO as GPIO
+import gpiozero
+from gpiozero import Button
+from gpiozero import LED
 #Sensor Libraries        
 import adafruit_tca9548a
 from adafruit_mcp9600 import MCP9600
@@ -62,14 +49,15 @@ import adafruit_ads1x15.ads1115 as ADS
 from adafruit_ads1x15.analog_in import AnalogIn
 #Threading Libraries
 import threading
-
+#Logging Libraries
+import csv
 # Set up GPIO mode
 GPIO.setmode(GPIO.BCM)
 
 # Pins for switch
 
-SWITCH_PIN_1 = 23  # Change to your first GPIO pin
-SWITCH_PIN_2 = 24  # Change to your second GPIO pin
+SWITCH_PIN_1 = 19  # Change to your first GPIO pin
+SWITCH_PIN_2 = 26  # Change to your second GPIO pin
 
 # Set up the pins as inputs with pull-down resistors
 GPIO.setup(SWITCH_PIN_1, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
@@ -86,8 +74,8 @@ LED4 = LED(21)  # ERRROR Led
 
 
 #PINS for button
-button = Button(18) # com cable to GPIO 18, NO  to GND
-bLED = LED(14)  # Button LED Gotta check if this pin is free
+button = Button(5) # com cable to GPIO 18, NO  to GND
+bLED = LED(13)  # Button LED Gotta check if this pin is free
 
 
 "THERMOCOUPLE CONTROLLER OBJECT"
@@ -380,7 +368,7 @@ def ledscpt():
         state1 = GPIO.input(SWITCH_PIN_1)
         state2 = GPIO.input(SWITCH_PIN_2)
         if KVEBench.current_state  == State.IDLE: # IDLE State LED Script, It just makes all LED ON
-            print("LEDs are ON in IDLE state" ,end='\r')
+            print("LEDs are ON in IDLE state")
         if KVEBench.current_state  == State.IDLE:    # IDLE State LED Script, It just makes all LED ON
                 LED1.on() #PRECHECK LED
                 LED2.on() #RUNNING STATIC LED
@@ -403,13 +391,13 @@ def ledscpt():
             print("LEDs are ON in PRECHECK state")  
 
 
-            while KVEBench.current_state  == State.PRECHECK_DYNAMIC or KVEBench.current_state == State.PRECHECK_STATIC: # It will blink LED2 it will also set a variable that will decide what LED 
-                                                                                    # set if the next LED is blue or white for the static or DYNAMIC running mode
-                            
-                LED1.off()
-                time.sleep(0.2)
-                LED1.on()
-                time.sleep(0.2)  
+        while KVEBench.current_state  == State.PRECHECK_DYNAMIC or KVEBench.current_state == State.PRECHECK_STATIC: # It will blink LED2 it will also set a variable that will decide what LED 
+                                                                                # set if the next LED is blue or white for the static or DYNAMIC running mode
+                        
+            LED1.off()
+            time.sleep(0.4)
+            LED1.on()
+            time.sleep(0.4)  
                 
                 
                 
@@ -449,7 +437,7 @@ def ledscpt():
                 print("LEDs are ON in ERROR state")
 
 "TEMPERATURE CONTROL CLASS"
-
+""""""
 class TemperatureController:
     def __init__(self, thermocouple_logger, fan_pin, heater_pin, heater_fan_pin):
         """
@@ -478,7 +466,7 @@ class TemperatureController:
         
         # Temperature thresholds
         self.desired_min = 15.0  # Default minimum temperature (°C)
-        self.desired_max = 17.0  # Default maximum temperature (°C)
+        self.desired_max = 20.0  # Default maximum temperature (°C)
         self.hysteresis = 1.0    # Hysteresis to prevent rapid switching
 
     def set_temperature_range(self, min_temp, max_temp, hysteresis=1.0):
@@ -579,6 +567,71 @@ class TemperatureController:
         """Clean up resources and ensure all outputs are off"""
         self._turn_off_fans()
         self._turn_off_heater()
+
+"""Logger Writer Class"""        
+
+class SDWriter:
+    def __init__(self, base_path="/media/rpi_kve/6465-3238/Tests"):
+        self.base_path = base_path
+        
+    def _generate_filename(self):
+        """Generate timestamped filename"""
+        return datetime.now().strftime("test_%Y%m%d_%H%M%S.csv")
+    
+    def _prepare_header(self, num_thermocouples, num_flow_sensors):
+        """Generate CSV header based on sensor configuration"""
+        header = ["timestamp"]
+        header.extend([f"thermocouple_{i+1}" for i in range(num_thermocouples)])
+        if num_flow_sensors > 0:
+            header.extend([f"flow_{i+1}" for i in range(num_flow_sensors)])
+        return header
+    
+    def _prepare_row(self, timestamp, temp_readings, flow_readings):
+        """Format one row of data"""
+        row = [f"{timestamp:.3f}"]  # Format timestamp to 3 decimal places
+        row.extend([f"{temp:.1f}" if temp is not None else "" for temp in temp_readings])
+        if flow_readings:
+            row.extend([f"{flow:.2f}" if flow is not None else "" for flow in flow_readings])
+        return row
+    
+    def write_to_csv(self, timestamps, temperatures, flows=None):
+        """
+        Write collected data to CSV file on SD card
+        Args:
+            timestamps: List of lists of timestamps (one per sensor)
+            temperatures: List of lists of temperature readings
+            flows: Optional list of lists of flow readings (for static tests)
+        """
+        filepath = f"{self.base_path}/{self._generate_filename()}"
+        
+        num_thermocouples = len(temperatures)
+        num_flow_sensors = len(flows) if flows else 0
+        
+        try:
+            with open(filepath, 'w', newline='') as csvfile:
+                writer = csv.writer(csvfile)
+                
+                # Write header
+                writer.writerow(self._prepare_header(num_thermocouples, num_flow_sensors))
+                
+                # Write data rows
+                num_samples = len(timestamps[0])  # Assuming all have same length
+                for i in range(num_samples):
+                    # Get all sensor readings for this timestamp
+                    temp_readings = [t[i] if i < len(t) else None for t in temperatures]
+                    flow_readings = [f[i] for f in flows] if flows else None
+                    
+                    # Use first sensor's timestamp (assuming synchronized)
+                    timestamp = timestamps[0][i] if timestamps else 0
+                    
+                    writer.writerow(self._prepare_row(timestamp, temp_readings, flow_readings))
+            
+            print(f"Successfully wrote {num_samples} samples to {filepath}")
+            return True
+            
+        except Exception as e:
+            print(f"Failed to write CSV: {str(e)}")
+            return False
 
 "State Machine States Class"
 
@@ -796,6 +849,8 @@ class StateMachine:
                     time.sleep(0.5)
                     bLED.off()
                     time.sleep(0.5)
+                elif KVEBench.current_state == State.IDLE :
+                    bLED.on()
 
         
         """Main loop for the state machine"""
@@ -814,11 +869,14 @@ class StateMachine:
 
 
         # Add thermocouples add flow sensors to the logger
-        logger.add_flow_sensor(4, 0x48, 0)  # Channel 4 Channel ADS 0
-        logger.add_thermocouple(0, 0x66)  # Channel 0
+        logger.add_thermocouple(0, 0x67)  # Channel 0
         logger.add_thermocouple(1, 0x67)  # Channel 1
-        logger.add_thermocouple(2, 0x66)  # Channel 2
-
+        logger.add_thermocouple(2, 0x67)  # Channel 2
+        logger.add_thermocouple(3, 0x65)  # Channel 3
+        logger.add_thermocouple(4, 0x66)  # Channel 4
+        logger.add_thermocouple(5, 0x66)  # Channel 5
+        logger.add_thermocouple(6, 0x67)  # Channel 6
+        logger.add_thermocouple(7, 0x67)  # Channel 7
         # Button press handler for interrupts
         def handle_button_press():
             nonlocal logger
@@ -829,6 +887,9 @@ class StateMachine:
         
         # Setup button callback
         button.when_pressed = handle_button_press
+
+        # SD Card Writer object
+        sd_writer = SDWriter()
 
         while True:
            
@@ -842,10 +903,12 @@ class StateMachine:
                 
                 logger.initialize_hardware_DYNAMIC()
                 logtemp = TemperatureController(logger, fan_pin=17, heater_pin=27, heater_fan_pin=22)  # Initialize temperature controller
+               
+               
                 while not logtemp.control_temperature() :  
                     print("Controlling temperature...")
                     time.sleep(1)
-               
+                
                     
                 while self.current_state == State.IDLE:
                     state1 = GPIO.input(SWITCH_PIN_1)
@@ -901,7 +964,29 @@ class StateMachine:
                         self.transition_to(State.COMPLETED)  
 
             elif self.current_state == State.COMPLETED:
-                "Ivan put here the logger data collection"
+                if state1 and not state2:  # Static test
+                    success = sd_writer.write_to_csv(
+                        timestamps=self.collected_timestamps,
+                        temperatures=self.collected_temperatures,
+                        flows=self.collected_flow,
+                        
+                    )
+                elif state2 and not state1:  # Dynamic test
+                    success = sd_writer.write_to_csv(
+                        timestamps=self.collected_timestamps,
+                        temperatures=self.collected_temperatures,
+                        flows=None,  # Explicitly no flow data
+                        
+                    )
+                else:
+                    print("Error: Invalid test mode state")
+                    success = False
+
+                if success:
+                    logger.clear_data()
+                    self.transition_to(State.IDLE)
+                else:
+                    self.transition_to(State.ERROR)
                 print("Test completed successfully")
                 print("Collected results:")
                 print("Temperatures:", self.collected_temperatures)
@@ -925,4 +1010,3 @@ class StateMachine:
 
 KVEBench = StateMachine()
 KVEBench.run()  # Start the state machine
-
