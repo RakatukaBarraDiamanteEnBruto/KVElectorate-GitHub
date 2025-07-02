@@ -849,7 +849,7 @@ class StateMachine:
                     time.sleep(0.5)
                     bLED.off()
                     time.sleep(0.5)
-                else:
+                elif KVEBench.current_state == State.IDLE :
                     bLED.on()
 
         
