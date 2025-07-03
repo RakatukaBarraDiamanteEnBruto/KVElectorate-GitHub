@@ -60,11 +60,9 @@ SWITCH_PIN_1 = 19  # Change to your first GPIO pin
 SWITCH_PIN_2 = 26  # Change to your second GPIO pin
 
 # Set up the pins as inputs with pull-down resistors
-GPIO.setup(SWITCH_PIN_1, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
-GPIO.setup(SWITCH_PIN_2, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
 
-state1 = GPIO.input(SWITCH_PIN_1) #Change to DYNAMIC and static later
-state2 = GPIO.input(SWITCH_PIN_2)
+switch1 = Button(SWITCH_PIN_1, pull_up=False)
+switch2 = Button(SWITCH_PIN_2, pull_up=False)
 #Pins for leds
 
 LED1 = LED(25) # PRECHECK Led
@@ -365,8 +363,8 @@ def ledscpt():
     
     while True:
                 # Always read the current state of the switches
-        state1 = GPIO.input(SWITCH_PIN_1)
-        state2 = GPIO.input(SWITCH_PIN_2)
+        state1 = switch1.is_pressed
+        state2 = switch2.is_pressed
         if KVEBench.current_state  == State.IDLE: # IDLE State LED Script, It just makes all LED ON
             print("LEDs are ON in IDLE state")
         if KVEBench.current_state  == State.IDLE:    # IDLE State LED Script, It just makes all LED ON
@@ -911,9 +909,9 @@ class StateMachine:
                 
                     
                 while self.current_state == State.IDLE:
-                    state1 = GPIO.input(SWITCH_PIN_1)
-                    state2 = GPIO.input(SWITCH_PIN_2)
-                    
+                    state1 = switch1.is_pressed
+                    state2 = switch2.is_pressed
+                                    
                     if state1 and not state2:
                         print("Static mode selected", end='\r')
                         if button.is_pressed:
