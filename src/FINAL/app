@@ -42,6 +42,7 @@ import RPi.GPIO as GPIO
 import gpiozero
 from gpiozero import Button
 from gpiozero import LED
+from gpiozero import DigitalOutputDevice as DOD
 #Sensor Libraries        
 import adafruit_tca9548a
 from adafruit_mcp9600 import MCP9600
@@ -447,20 +448,17 @@ class TemperatureController:
             heater_pin: GPIO pin for controlling heater (via optocoupler)
             heater_fan_pin: GPIO pin for controlling heater's integrated fan
         """
-        self.logger = thermocouple_logger
-        self.fan_pin = fan_pin
-        self.heater_pin = heater_pin
-        self.heater_fan_pin = heater_fan_pin
+        self.logger = DOD(thermocouple_logger)
+        self.fan = DOD(fan_pin)
+        self.heater = DOD(heater_pin)
+        self.heater_fan = DOD(heater_fan_pin)
         
         # Setup GPIO pins
-        GPIO.setup(self.fan_pin, GPIO.OUT)
-        GPIO.setup(self.heater_pin, GPIO.OUT)
-        GPIO.setup(self.heater_fan_pin, GPIO.OUT)
-        
+
         # Initialize all outputs to off
-        GPIO.output(self.fan_pin, GPIO.LOW)
-        GPIO.output(self.heater_pin, GPIO.LOW)
-        GPIO.output(self.heater_fan_pin, GPIO.LOW)
+        self.fan.off
+        self.heater.off
+        self.heater_fan.off
         
         # Temperature thresholds
         self.desired_min = 15.0  # Default minimum temperature (°C)
@@ -497,8 +495,8 @@ class TemperatureController:
         if self.desired_min <= avg_temp <= self.desired_max:
             print(f"Temperature {avg_temp}°C is in desired range")
             # Turn off both systems
-            self._turn_off_fans()
-            self._turn_off_heater()
+            self.fans.off
+            self.heater.fan.off
             
             # Check if stabilized (stays in range for some time)
             stabilized = self._check_stabilization()
@@ -509,37 +507,39 @@ class TemperatureController:
         # Temperature is outside desired range
         elif avg_temp > self.desired_max + self.hysteresis:
             print(f"Temperature {avg_temp}°C is too high - cooling")
-            self._turn_off_heater()
-            self._turn_on_fans()
+            self.heater.off
+            self.fan.on
             
             
         elif avg_temp < self.desired_min - self.hysteresis:
             print(f"Temperature {avg_temp}°C is too low - heating")
-            self._turn_off_fans()
-            self._turn_on_heater()
+            self.fan.off
+            self.heater.on
             
         return False
-        
+     """"" 
     def _turn_on_fans(self):
-        """Turn on the cooling fans"""
+        #"Turn on the cooling fans"
         GPIO.output(self.fan_pin, GPIO.HIGH)
         GPIO.output(self.heater_fan_pin, GPIO.HIGH)
         
     def _turn_off_fans(self):
-        """Turn off the cooling fans"""
+        #"Turn off the cooling fans"
         GPIO.output(self.fan_pin, GPIO.LOW)
         GPIO.output(self.heater_fan_pin, GPIO.LOW)
         
     def _turn_on_heater(self):
-        """Turn on the heater and its integrated fan"""
+        #Turn on the heater and its integrated fan
         GPIO.output(self.heater_pin, GPIO.HIGH)
         GPIO.output(self.heater_fan_pin, GPIO.HIGH)
         
     def _turn_off_heater(self):
-        """Turn off the heater and its integrated fan"""
+       # Turn off the heater and its integrated fan
         GPIO.output(self.heater_pin, GPIO.LOW)
         GPIO.output(self.heater_fan_pin, GPIO.LOW)
-        
+
+      """
+
     def _check_stabilization(self, check_duration=5, check_interval=1):
         """
         Check if temperature stays in desired range for specified duration
