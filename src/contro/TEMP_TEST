@@ -317,7 +317,7 @@ class TemperatureController:
         self._turn_off_heater()
 
 logtemp = TemperatureController(logger, fan_pin=17, heater_pin=27, heater_fan_pin=22)
-logtemp.set_temperature_range(29.0, 31.0, hysteresis=1.0)
+logtemp.set_temperature_range(15, 16, hysteresis=1.0)
 logger.collect_data(duration_sec=2,max_samples=100)
 while not logtemp.control_temperature() :
     print("Controlling temperature...")
