@@ -448,7 +448,7 @@ class TemperatureController:
             heater_pin: GPIO pin for controlling heater (via optocoupler)
             heater_fan_pin: GPIO pin for controlling heater's integrated fan
         """
-        self.logger = DOD(thermocouple_logger)
+        self.logger = thermocouple_logger
         self.fan = DOD(fan_pin)
         self.heater = DOD(heater_pin)
         self.heater_fan = DOD(heater_fan_pin)
