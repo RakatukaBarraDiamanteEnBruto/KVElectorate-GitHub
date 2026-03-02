@@ -517,7 +517,7 @@ class TemperatureController:
             self.heater.on
             
         return False
-     """"" 
+    """"" 
     def _turn_on_fans(self):
         #"Turn on the cooling fans"
         GPIO.output(self.fan_pin, GPIO.HIGH)
