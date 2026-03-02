@@ -569,7 +569,7 @@ class TemperatureController:
 """Logger Writer Class"""        
 
 class SDWriter:
-    def __init__(self, base_path="/media/rpi_kve/6465-3238/Tests"):
+    def __init__(self, base_path="/media/rpi_kve/KVELOGGER/LoggedTests"):
         self.base_path = base_path
         
     def _generate_filename(self):
