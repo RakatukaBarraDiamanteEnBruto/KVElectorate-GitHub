@@ -16,13 +16,13 @@ switch1 = Button(SWITCH_PIN_1, pull_up=False)
 switch2 = Button(SWITCH_PIN_2, pull_up=False)
 state1 = switch1.is_pressed
 state2 = switch2.is_pressed
-                
-if state1 and not state2:
-    print("Static mode selected", end='\r')
+while True:                
+    if state1 and not state2:
+        print("Static mode selected", end='\r')
 
-        
-elif state2 and not state1:
-    print("DYNAMIC mode selected", end='\r')
+            
+    elif state2 and not state1:
+        print("DYNAMIC mode selected", end='\r')
 
-else:
-    print("No mode selected", end='\r')
+    else:
+        print("No mode selected", end='\r')
