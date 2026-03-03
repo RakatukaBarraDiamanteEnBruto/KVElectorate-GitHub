@@ -15,6 +15,7 @@ while True:
         print("Switch 2 up")
     else:
         print("No switch up")
+    sleep(1)
 
 
 
