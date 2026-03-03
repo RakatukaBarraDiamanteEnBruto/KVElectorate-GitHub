@@ -27,4 +27,5 @@ while True:
 
     else:
         print("No mode selected")
+    print(state1, state2, end="\r", flush=True)    
     sleep(0.5)
