@@ -2,8 +2,11 @@ from gpiozero import Button
 from time import sleep
 
 # Setup
-switchpin1 = 17  # GPIO pin connected to COM
+switchpin1 = 19  # GPIO pin connected to COM
 switchpin2 = 26
+
+switch1 = Button(switchpin1)
+switch2 = Button(switchpin2)
 
 while True:
     if switchpin1:  
