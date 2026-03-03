@@ -16,6 +16,7 @@ except (ModuleNotFoundError, ImportError):
     from unittest.mock import MagicMock
     Button = MagicMock()
 from gpiozero import DigitalOutputDevice as DOD
+from gpiozero import LED
 try:
     from gpiozero import LED
 except (ModuleNotFoundError, ImportError):
@@ -185,7 +186,7 @@ logger = MultiplexedThermocoupleLogger()
 
 # Add thermocouples
 logger.add_thermocouple(0, 0x67)
-logger.add_thermocouple(1, 0x66)
+logger.add_thermocouple(1, 0x67)
 logger.add_thermocouple(2, 0x67)
 logger.initialize_hardware()
 
@@ -201,9 +202,9 @@ class TemperatureController:
             heater_fan_pin: GPIO pin for controlling heater's integrated fan
         """
         self.logger = thermocouple_logger
-        self.fan_pin = DOD(fan_pin)
-        self.heater_pin = DOD(heater_pin)
-        self.heater_fan_pin = DOD(heater_fan_pin)
+        self.fan_pin = LED(fan_pin)
+        self.heater_pin = LED(heater_pin)
+        self.heater_fan_pin = LED(heater_fan_pin)
         
         self.fan_pin.off
         self.heater_pin.off 
