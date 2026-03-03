@@ -14,9 +14,10 @@ SWITCH_PIN_2 = 26  # Change to your second GPIO pin
 
 switch1 = Button(SWITCH_PIN_1, pull_up=False)
 switch2 = Button(SWITCH_PIN_2, pull_up=False)
-state1 = switch1.is_pressed
-state2 = switch2.is_pressed
-while True:                
+
+while True: 
+    state1 = switch1.is_pressed
+    state2 = switch2.is_pressed
     if state1 and not state2:
         print("Static mode selected", end='\r')
 
