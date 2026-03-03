@@ -25,4 +25,5 @@ while True:
         print("DYNAMIC mode selected", end='\r')
 
     else:
-        print("No mode selected", end='\r')
+        print("No mode selected")
+    sleep(0.5)
