@@ -189,9 +189,9 @@ class TemperatureController:
         self.logger = thermocouple_logger
 
         # gpiozero outputs
-        self.fan_out = DigitalOutputDevice(fan_pin, active_high=active_high, initial_value=False)
-        self.heater_out = DigitalOutputDevice(heater_pin, active_high=active_high, initial_value=False)
-        self.heater_fan_out = DigitalOutputDevice(heater_fan_pin, active_high=active_high, initial_value=False)
+        self.fan_out = DigitalOutputDevice(fan_pin)
+        self.heater_out = DigitalOutputDevice(heater_pin)
+        self.heater_fan_out = DigitalOutputDevice(heater_fan_pin)
 
         # Temperature thresholds
         self.desired_min = 25.0  # Default minimum temperature (°C)
@@ -307,8 +307,7 @@ logtemp = TemperatureController(logger, fan_pin=17, heater_pin=27, heater_fan_pi
 logtemp.set_temperature_range(30, 36, hysteresis=1.0)
 
 logger.collect_data(duration_sec=2, max_samples=20)
-while logtemp._check_stabilization == False:
-    logtemp.control_temperature()
+
 while not logtemp.control_temperature():
     print("Controlling temperature...")
     time.sleep(1)
