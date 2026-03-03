@@ -202,7 +202,7 @@ class TemperatureController:
             heater_fan_pin: GPIO pin for controlling heater's integrated fan
         """
         self.logger = thermocouple_logger
-        self.fan_pin = LED(fan_pin)
+        self.fan_pin = LED(17)
         self.heater_pin = LED(heater_pin)
         self.heater_fan_pin = LED(heater_fan_pin)
         
@@ -314,7 +314,7 @@ class TemperatureController:
 
     def cleanup(self):
         """Clean up resources and ensure all outputs arfe off"""
-        self._turn_off_fans()
+        self.fan_pin.off
         self._turn_off_heater()
 
 logtemp = TemperatureController(logger, fan_pin=17, heater_pin=27, heater_fan_pin=22)
