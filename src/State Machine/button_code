@@ -1,21 +1,28 @@
 from gpiozero import Button
 from time import sleep
 
-# Setup
-switchpin1 = 19  # GPIO pin connected to COM
-switchpin2 = 26
-
-switch1 = Button(switchpin1)
-switch2 = Button(switchpin2)
-
-while True:
-    if switch1.is_pressed :  
-        print("Switch 1 up")
-    if switch2.is_pressed: 
-        print("Switch 2 up")
-    if switch1.is_pressed and switch2.is_pressed == False:
-        print("No switch up")
-    sleep(1)
 
 
 
+
+# Pins for switch
+
+SWITCH_PIN_1 = 19  # Change to your first GPIO pin
+SWITCH_PIN_2 = 26  # Change to your second GPIO pin
+
+# Set up the pins as inputs with pull-down resistors
+
+switch1 = Button(SWITCH_PIN_1, pull_up=False)
+switch2 = Button(SWITCH_PIN_2, pull_up=False)
+state1 = switch1.is_pressed
+state2 = switch2.is_pressed
+                
+if state1 and not state2:
+    print("Static mode selected", end='\r')
+
+        
+elif state2 and not state1:
+    print("DYNAMIC mode selected", end='\r')
+
+else:
+    print("No mode selected", end='\r')
