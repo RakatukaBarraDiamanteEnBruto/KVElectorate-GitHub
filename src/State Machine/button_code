@@ -9,9 +9,9 @@ switch1 = Button(switchpin1)
 switch2 = Button(switchpin2)
 
 while True:
-    if switchpin1:  
+    if switch1:  
         print("Switch 1 up")
-    if switchpin2: 
+    if switch2: 
         print("Switch 2 up")
     else:
         print("No switch up")

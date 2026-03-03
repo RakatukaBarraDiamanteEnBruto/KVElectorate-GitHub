@@ -129,3 +129,5 @@ class TemperatureController:
         """Clean up resources and ensure all outputs are off"""
         self._turn_off_fans()
         self._turn_off_heater()
+
+    test=TemperatureController()
