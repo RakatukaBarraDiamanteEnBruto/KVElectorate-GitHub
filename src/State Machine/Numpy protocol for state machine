@@ -1,0 +1,97 @@
+import numpy as np
+
+PARAM_TIME = 0
+PARAM_VOLTAGE = 1
+PARAM_BDOT = 2
+PARAM_B = 3
+PARAM_I = 4
+PARAM_OTHER_4 = 5
+
+
+def cumulative_trapezoid_2d(y, dt, initial=0.0):
+    """
+    Cumulative trapezoidal integration for a 2D array.
+
+    Input:
+        y.shape == (n_samples, n_values)
+
+    Integration is performed along axis 1.
+    """
+    y = np.asarray(y, dtype=np.float64)
+
+    n_samples, n_values = y.shape
+
+    out = np.zeros((n_samples, n_values), dtype=np.float64)
+    out[:, 0] = initial
+
+    increments = 0.5 * (y[:, 1:] + y[:, :-1]) * dt
+    out[:, 1:] = np.cumsum(increments, axis=1) + initial
+
+    return out
+
+
+def process_completed_test(raw_data, dt, current_constant):
+    """
+    raw_data shape:
+        (n_samples, n_parameters, n_values)
+
+    Example:
+        (30, 6, 8000)
+    """
+
+    raw_data = np.asarray(raw_data, dtype=np.float64)
+
+    if raw_data.ndim != 3:
+        raise ValueError("raw_data must be a 3D NumPy array")
+
+    n_samples, n_parameters, n_values = raw_data.shape
+
+    if n_parameters != 6:
+        raise ValueError("Expected 6 parameters in axis 1")
+
+    # --------------------------------------------------
+    # 1. Extract raw voltage channels
+    # --------------------------------------------------
+    bdot_voltage = raw_data[:, PARAM_BDOT_VOLTAGE, :]       # shape (n_samples, n_values)
+    current_voltage = raw_data[:, PARAM_CURRENT_VOLTAGE, :] # shape (n_samples, n_values)
+
+    # --------------------------------------------------
+    # 2. Convert Bdot voltage -> Bdot in mT
+    #    Based on 0.55 V to mT conversion
+    # --------------------------------------------------
+    bdot_mT = bdot_voltage / 0.55
+
+    # --------------------------------------------------
+    # 3. Integrate Bdot -> B using trapezoidal rule
+    # --------------------------------------------------
+    B = cumulative_trapezoid_2d(bdot_mT, dt=dt, initial=0.0)
+
+    # --------------------------------------------------
+    # 4. Convert current voltage -> current
+    # --------------------------------------------------
+    current = current_voltage * current_constant
+
+    # --------------------------------------------------
+    # 5. Build processed_data array with same shape
+    # --------------------------------------------------
+    processed_data = np.zeros_like(raw_data, dtype=np.float64)
+
+    processed_data[:, PARAM_BDOT_VOLTAGE, :] = bdot_mT
+    processed_data[:, PARAM_CURRENT_VOLTAGE, :] = current
+    processed_data[:, PARAM_OTHER_1, :] = raw_data[:, PARAM_OTHER_1, :]
+    processed_data[:, PARAM_OTHER_2, :] = raw_data[:, PARAM_OTHER_2, :]
+    processed_data[:, PARAM_OTHER_3, :] = raw_data[:, PARAM_OTHER_3, :]
+    processed_data[:, PARAM_OTHER_4, :] = raw_data[:, PARAM_OTHER_4, :]
+
+    # --------------------------------------------------
+    # 6. Return everything
+    # --------------------------------------------------
+    return {
+        "raw_data": raw_data,
+        "processed_data": processed_data,
+        "bdot_voltage": bdot_voltage,
+        "bdot_mT": bdot_mT,
+        "B": B,
+        "current_voltage": current_voltage,
+        "current": current,
+    }
