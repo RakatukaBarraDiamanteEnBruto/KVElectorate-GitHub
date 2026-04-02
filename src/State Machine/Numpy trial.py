@@ -15,18 +15,7 @@ To do that during operation the NP arrays should be  stored into a list . The le
 Then with the list itslef you can index the value of each 1D array inside of it and introduce it into the 3d array
 Then the 3d array can modify itslef calculating the specific values for each parameter of each value
 
-
-
-
-
-
-
 """
-
-
-
-
-
 
 dt = 0.00000001
 mpc = 0.000012566370614 
@@ -89,51 +78,3 @@ for i in range (ns):
     Sample1[i,6,:] +=  Sample1[i,5,:] * BS  
 print(Sample1)
 
-"""
-
-dt = 0.00000001
-mpc = 0.000012566370614 
-BS = 8.00823
-vmean = -0.00117431640625
-
-
-Sample1 = np.zeros((1, 6 , 8000))
-Sample1 = np.stack((Sample1, ADCC5))
-print(Sample1.shape)
-
-
-
-Sample1[0] += ADCC
-print(Sample1.ndim)
-print(Sample1)
-Sample1[0] += 49
-Sample1[1] += (Sample1[0]*10/256)
-print("")
-print("")
-print(Sample1)
-print("")
-
-print("")
-Sample1[2] = Sample1[1]*5.5
-print(Sample1)
-
-# I tthink that when the Osciloscope is in AC coupling mode, the mean value of the signal is subtracted, so we need to remove the mean from the bdot signal before integrating to get B. This is because the AC coupling removes any DC offset from the signal, which can affect the accuracy of the integration if not accounted for.
-print("")
-Sample1[3] = (Sample1[2] - Sample1[2].mean()) 
-
-
-# Row 3: B (integrated using trapezoidal rule)
-# B_k = B_{k-1} + 0.5 * (bdot_{k-1} + bdot_k) * dt
-Sample1[4][0] = 0  # initial value
-Sample1[4][1:] = np.cumsum(0.5 * (Sample1[3][:-1] + Sample1[3][1:]) * dt) + Sample1[4][0]
-
-print(Sample1)
-print("")
-print("")
-Sample1[5] = Sample1[4] /  mpc
-print(Sample1)
-print("")
-print("")
-Sample1[6] = Sample1[5] * BS
-print(Sample1)
-print(Sample1[1].mean())"""

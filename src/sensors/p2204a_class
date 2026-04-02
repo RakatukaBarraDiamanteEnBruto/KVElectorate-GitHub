@@ -1,7 +1,7 @@
 import time
 import numpy as np
 from pathlib import Path
-
+import time
 from picosdk.ps2000 import ps2000 as ps
 from picosdk.functions import adc2mV, assert_pico_ok
 
@@ -226,5 +226,8 @@ class P2204a:
         self.initialized = False
 
 
-tbscope = P2204a()  
+tbscope = P2204a() 
+
+
+
 
