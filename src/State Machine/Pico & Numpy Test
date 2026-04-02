@@ -1,0 +1,272 @@
+import time
+import ctypes
+import numpy as np
+
+from picosdk.ps2000a import ps2000a as ps
+from picosdk.functions import assert_pico_ok
+
+
+# ============================================================
+# USER SETTINGS
+# ============================================================
+CAPTURE_DURATION_S = 10
+SAMPLES_PER_BLOCK = 8000
+CHANNEL = ps.PS2000A_CHANNEL["PS2000A_CHANNEL_A"]
+TIMEBASE = 0  # fastest available timebase
+
+# Processing constants from Numpy trial.py
+DT = 0.00000001
+MPC = 0.000012566370614
+BS = 8.00823
+VMEAN = -0.00117431640625   # kept here because it exists in your file
+
+
+# ============================================================
+# OPEN PICO
+# ============================================================
+chandle = ctypes.c_int16()
+status = {}
+
+status["openUnit"] = ps.ps2000aOpenUnit(ctypes.byref(chandle), None)
+assert_pico_ok(status["openUnit"])
+
+
+# ============================================================
+# CONFIGURE CHANNEL A
+# AC coupling, +-5 mV
+# ============================================================
+status["setChannelA"] = ps.ps2000aSetChannel(
+    chandle,
+    CHANNEL,
+    1,  # enabled
+    ps.PS2000A_COUPLING["PS2000A_AC"],
+    ps.PS2000A_RANGE["PS2000A_5MV"],
+    0.0
+)
+assert_pico_ok(status["setChannelA"])
+
+
+# ============================================================
+# DISABLE TRIGGER
+# ============================================================
+status["setTrigger"] = ps.ps2000aSetSimpleTrigger(
+    chandle,
+    0,   # disable trigger
+    CHANNEL,
+    0,
+    0,
+    0,
+    0
+)
+assert_pico_ok(status["setTrigger"])
+
+
+# ============================================================
+# CHECK TIMEBASE
+# ============================================================
+time_interval_ns = ctypes.c_float()
+returned_max_samples = ctypes.c_int32()
+
+status["getTimebase2"] = ps.ps2000aGetTimebase2(
+    chandle,
+    TIMEBASE,
+    SAMPLES_PER_BLOCK,
+    ctypes.byref(time_interval_ns),
+    ctypes.byref(returned_max_samples),
+    0
+)
+assert_pico_ok(status["getTimebase2"])
+
+print(f"Sample interval: {time_interval_ns.value} ns")
+print(f"Max samples available at this timebase: {returned_max_samples.value}")
+
+
+# ============================================================
+# CAPTURE STORAGE
+# Each entry is one 1D np array of 8000 samples
+# ============================================================
+captured_blocks = []
+
+
+# ============================================================
+# CAPTURE ONE BLOCK
+# ============================================================
+def capture_block():
+    buffer_a = (ctypes.c_int16 * SAMPLES_PER_BLOCK)()
+
+    status["setDataBuffers"] = ps.ps2000aSetDataBuffers(
+        chandle,
+        CHANNEL,
+        ctypes.byref(buffer_a),
+        None,
+        SAMPLES_PER_BLOCK,
+        0,
+        0
+    )
+    assert_pico_ok(status["setDataBuffers"])
+
+    status["runBlock"] = ps.ps2000aRunBlock(
+        chandle,
+        0,                   # pre-trigger samples
+        SAMPLES_PER_BLOCK,   # post-trigger samples
+        TIMEBASE,
+        None,
+        0,
+        None,
+        None
+    )
+    assert_pico_ok(status["runBlock"])
+
+    ready = ctypes.c_int16(0)
+    while ready.value == 0:
+        status["isReady"] = ps.ps2000aIsReady(chandle, ctypes.byref(ready))
+
+    sample_count = ctypes.c_int32(SAMPLES_PER_BLOCK)
+    overflow = ctypes.c_int16()
+
+    status["getValues"] = ps.ps2000aGetValues(
+        chandle,
+        0,
+        ctypes.byref(sample_count),
+        1,
+        0,
+        0,
+        ctypes.byref(overflow)
+    )
+    assert_pico_ok(status["getValues"])
+
+    return np.array(buffer_a[:sample_count.value], dtype=np.int16)
+
+
+# ============================================================
+# PROCESS CAPTURED BLOCKS
+# Output shape: (n_samples, 7, 8000)
+#
+# Index meaning:
+#   0 = raw ADC
+#   1 = shifted ADC (+49)
+#   2 = voltage
+#   3 = mean removed signal
+#   4 = integrated signal
+#   5 = divided by MPC
+#   6 = multiplied by BS
+# ============================================================
+def process_captured_blocks(block_list, dt=DT, mpc=MPC, bs=BS):
+    ns = len(block_list)
+
+    if ns == 0:
+        return np.empty((0, 7, SAMPLES_PER_BLOCK), dtype=np.float64)
+
+    processed = np.zeros((ns, 7, SAMPLES_PER_BLOCK), dtype=np.float64)
+
+    for i in range(ns):
+        raw_block = np.asarray(block_list[i], dtype=np.float64)
+
+        if raw_block.shape[0] != SAMPLES_PER_BLOCK:
+            raise ValueError(
+                f"Block {i} has length {raw_block.shape[0]}, "
+                f"expected {SAMPLES_PER_BLOCK}"
+            )
+
+        # Row 0: raw ADC
+        processed[i, 0, :] = raw_block
+
+        # Row 1: shifted ADC
+        processed[i, 1, :] = processed[i, 0, :] + 49
+
+        # Row 2: voltage
+        processed[i, 2, :] = processed[i, 1, :] * 10 / 256
+
+        # Row 3: scaled signal then mean removed
+        processed[i, 3, :] = processed[i, 2, :] * 5.5
+        processed[i, 3, :] = processed[i, 3, :] - processed[i, 3, :].mean()
+
+        # Row 4: trapezoidal integration
+        processed[i, 4, 0] = 0.0
+        processed[i, 4, 1:] = np.cumsum(
+            0.5 * (processed[i, 3, :-1] + processed[i, 3, 1:]) * dt
+        )
+
+        # Row 5: divide by mpc
+        processed[i, 5, :] = processed[i, 4, :] / mpc
+
+        # Row 6: multiply by BS
+        processed[i, 6, :] = processed[i, 5, :] * bs
+
+    return processed
+
+
+# ============================================================
+# TIMED ACQUISITION LOOP
+# Wait for each 1-second window using monotonic time
+# ============================================================
+start_time = time.monotonic()
+end_time = start_time + CAPTURE_DURATION_S
+next_read_time = start_time + 1.0
+
+print("Starting timed block acquisition...")
+
+while True:
+    now = time.monotonic()
+
+    if now >= end_time:
+        break
+
+    # detect read window
+    if now >= next_read_time:
+        read_timestamp = now - start_time
+
+        block = capture_block()
+        captured_blocks.append(block)
+
+        print(
+            f"Read at t = {read_timestamp:.6f} s | "
+            f"Captured block {len(captured_blocks)} | "
+            f"shape = {block.shape}"
+        )
+
+        # move to the next 1-second boundary
+        next_read_time += 1.0
+
+        # if code is late, keep advancing until next window is in the future
+        while next_read_time <= time.monotonic():
+            next_read_time += 1.0
+
+
+# ============================================================
+# STOP AND CLOSE SCOPE
+# ============================================================
+status["stop"] = ps.ps2000aStop(chandle)
+assert_pico_ok(status["stop"])
+
+status["closeUnit"] = ps.ps2000aCloseUnit(chandle)
+assert_pico_ok(status["closeUnit"])
+
+
+# ============================================================
+# PROCESS ALL CAPTURED BLOCKS AFTER ACQUISITION
+# ============================================================
+processed_blocks = process_captured_blocks(captured_blocks)
+
+print("\nAcquisition finished.")
+print(f"Total captured blocks: {len(captured_blocks)}")
+print(f"Processed array shape: {processed_blocks.shape}")
+
+# Example access:
+# processed_blocks[sample_index, parameter_index, value_index]
+#
+# parameter_index:
+# 0 = raw ADC
+# 1 = shifted ADC
+# 2 = voltage
+# 3 = mean removed signal
+# 4 = integrated signal
+# 5 = divided by MPC
+# 6 = multiplied by BS
+
+# Optional checks
+if len(captured_blocks) > 0:
+    print("\nExample first raw block shape:", captured_blocks[0].shape)
+    print("Example first processed sample shape:", processed_blocks[0].shape)
+    print("First processed sample, row 0 (raw ADC), first 10 values:")
+    print(processed_blocks[0, 0, :10])
