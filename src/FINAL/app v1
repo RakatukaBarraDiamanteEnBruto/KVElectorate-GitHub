@@ -52,6 +52,18 @@ from adafruit_ads1x15.analog_in import AnalogIn
 import threading
 #Logging Libraries
 import csv
+#MFSensor Numerical Processing Libraries
+import numpy as np
+#Plotting Libraries
+import sys
+import os
+sys.path.insert(0, os.path.dirname(__file__))
+
+import numpy as np
+import matplotlib.pyplot as plt
+from importlib import util
+
+
 # Set up GPIO mode
 GPIO.setmode(GPIO.BCM)
 

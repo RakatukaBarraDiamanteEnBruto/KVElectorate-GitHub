@@ -19,8 +19,10 @@ fig = plt.figure(figsize=(16, 14))
 
 # Create a subplot for each row
 num_rows = Sample1.shape[0]
+num_cols = 2
+num_rows_grid = (num_rows + num_cols - 1) // num_cols  # Calculate grid rows needed
 for i in range(num_rows):
-    ax = plt.subplot(3, 2, i + 1)
+    ax = plt.subplot(num_rows_grid, num_cols, i + 1)
     ax.plot(Sample1[i], linewidth=1.5, color='steelblue')
     ax.fill_between(range(Sample1.shape[1]), Sample1[i], alpha=0.3, color='steelblue')
     ax.set_xlabel('Column Index')

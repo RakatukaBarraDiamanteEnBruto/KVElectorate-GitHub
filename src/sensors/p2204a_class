@@ -1,0 +1,230 @@
+import time
+import numpy as np
+from pathlib import Path
+
+from picosdk.ps2000 import ps2000 as ps
+from picosdk.functions import adc2mV, assert_pico_ok
+
+
+class P2204a:
+    def __init__(self):
+        # Device state
+        self.handle = None
+        self.initialized = False
+        self.ready = False
+
+        # Timing
+        self.time_reference = None
+        self.capture_timestamp = None
+
+        # Channel config
+        self.channels = {
+            "A": {"enabled": True, "coupling": "AC", "range": "2V"},
+            "B": {"enabled": False, "coupling": "AC", "range": "2V"},
+        }
+
+        # Sampling config
+        self.timebase = 8
+        self.pre_trigger_samples = 0
+        self.post_trigger_samples = 2000
+
+        # Trigger config
+        self.trigger = {
+            "enabled": False,
+            "channel": "A",
+            "threshold_mv": 100.0,
+            "direction": 2,  # rising
+            "delay": 0,
+            "auto_trigger_ms": 1000,
+        }
+
+        # Data storage
+        self.time_axis = None
+        self.voltage_data = {}
+        self.adc_data = {}
+
+    # ===================== TIME =====================
+    def set_time_reference(self, t0):
+        self.time_reference = t0
+
+    def get_capture_elapsed(self):
+        if self.capture_timestamp is None or self.time_reference is None:
+            return None
+        return self.capture_timestamp - self.time_reference
+
+    # ===================== CONFIG =====================
+    def set_channel(self, ch, enabled=True, coupling="DC", voltage_range="2V"):
+        self.channels[ch] = {
+            "enabled": enabled,
+            "coupling": coupling,
+            "range": voltage_range,
+        }
+
+    def disable_channel(self, ch):
+        self.channels[ch]["enabled"] = False
+
+    def set_timebase(self, timebase):
+        self.timebase = timebase
+
+    def set_sample_count(self, pre_trigger_samples, post_trigger_samples):
+        self.pre_trigger_samples = pre_trigger_samples
+        self.post_trigger_samples = post_trigger_samples
+
+    def set_trigger(self, channel="A", threshold_mv=100.0,
+                    direction="rising", delay=0, auto_trigger_ms=1000):
+
+        direction_map = {
+            "rising": 2,
+            "falling": 3
+        }
+
+        self.trigger = {
+            "enabled": True,
+            "channel": channel,
+            "threshold_mv": threshold_mv,
+            "direction": direction_map.get(direction, 2),
+            "delay": delay,
+            "auto_trigger_ms": auto_trigger_ms,
+        }
+
+    def disable_trigger(self):
+        self.trigger["enabled"] = False
+
+    # ===================== INITIALIZATION =====================
+    def initialize_hardware(self):
+        self.handle = ps.ps2000_open_unit()
+        assert_pico_ok(self.handle)
+
+        for ch, cfg in self.channels.items():
+            channel_enum = 0 if ch == "A" else 1
+            enabled = int(cfg["enabled"])
+            coupling = 1 if cfg["coupling"] == "DC" else 0
+            voltage_range = 7  # default 2V
+
+            ps.ps2000_set_channel(
+                self.handle,
+                channel_enum,
+                enabled,
+                coupling,
+                voltage_range
+            )
+
+        self.initialized = True
+
+    # ===================== ACQUISITION =====================
+    def capture_block(self):
+        if not self.initialized:
+            raise RuntimeError("PicoScope not initialized")
+
+        total_samples = self.pre_trigger_samples + self.post_trigger_samples
+
+        time_interval = np.zeros(1, dtype=np.int32)
+        max_samples = np.zeros(1, dtype=np.int32)
+
+        ps.ps2000_get_timebase(
+            self.handle,
+            self.timebase,
+            total_samples,
+            time_interval,
+            1,
+            max_samples,
+            0
+        )
+
+        ps.ps2000_run_block(
+            self.handle,
+            self.pre_trigger_samples,
+            self.post_trigger_samples,
+            self.timebase,
+            1,
+            None,
+            None
+        )
+
+        # Wait until ready
+        ready = 0
+        while ready == 0:
+            ready = ps.ps2000_ready(self.handle)
+            time.sleep(0.01)
+
+        # Timestamp HERE (aligned with actual acquisition completion)
+        self.capture_timestamp = time.monotonic()
+
+        # Buffers
+        buffer_a = np.zeros(total_samples, dtype=np.int16)
+        buffer_b = np.zeros(total_samples, dtype=np.int16)
+
+        ps.ps2000_get_values(
+            self.handle,
+            buffer_a,
+            buffer_b,
+            None,
+            None,
+            total_samples
+        )
+
+        # Store ADC
+        self.adc_data = {}
+        if self.channels["A"]["enabled"]:
+            self.adc_data["A"] = buffer_a.copy()
+        if self.channels["B"]["enabled"]:
+            self.adc_data["B"] = buffer_b.copy()
+
+        # Convert to voltage
+        max_adc = 32767
+        self.voltage_data = {}
+
+        for ch in self.adc_data:
+            self.voltage_data[ch] = adc2mV(self.adc_data[ch], 7, max_adc) / 1000.0
+
+        # Time axis (relative waveform time)
+        dt = time_interval[0] * 1e-9
+        self.time_axis = np.linspace(0, dt * total_samples, total_samples)
+
+    # ===================== DATA =====================
+    def get_data(self):
+        return {
+            "time": self.time_axis,
+            "voltage": self.voltage_data,
+            "adc": self.adc_data,
+            "timestamp_monotonic": self.capture_timestamp,
+            "timestamp_elapsed": self.get_capture_elapsed(),
+        }
+
+    def clear_data(self):
+        self.time_axis = None
+        self.voltage_data = {}
+        self.adc_data = {}
+        self.capture_timestamp = None
+
+    # ===================== SAVE =====================
+    def save_npz(self, filename):
+        data = self.get_data()
+        np.savez(filename, **data)
+
+    def save_csv(self, filename):
+        data = self.get_data()
+        time_arr = data["time"]
+
+        with open(filename, "w") as f:
+            headers = ["time"]
+            headers += list(data["voltage"].keys())
+            f.write(",".join(headers) + "\n")
+
+            for i in range(len(time_arr)):
+                row = [str(time_arr[i])]
+                for ch in data["voltage"]:
+                    row.append(str(data["voltage"][ch][i]))
+                f.write(",".join(row) + "\n")
+
+    # ===================== CLEANUP =====================
+    def stop(self):
+        ps.ps2000_stop(self.handle)
+
+    def close(self):
+        ps.ps2000_close_unit(self.handle)
+        self.initialized = False
+
+
+tbscope = P2204a()  
+
