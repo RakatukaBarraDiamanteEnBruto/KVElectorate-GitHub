@@ -1,0 +1,104 @@
+import time
+from datetime import timedelta
+
+import board
+import busio
+import adafruit_ads1x15.ads1115 as ADS
+from adafruit_ads1x15.analog_in import AnalogIn
+
+
+class ADS1115Test:
+    def __init__(self, ads_address=0x48, shunt_resistor_ohms=250.0):
+        # I2C
+        self.i2c = busio.I2C(board.SCL, board.SDA)
+
+        # ADS1115
+        self.ads = ADS.ADS1115(self.i2c, address=ads_address)
+
+        # Use the widest input range: ±6.144 V
+        # Good choice if using a 250 ohm shunt for 4-20 mA -> 1-5 V
+        self.ads.gain = 2 / 3
+
+        # Sample rate
+        self.ads.data_rate = 128
+
+        # Channels
+        self.flow_channel = AnalogIn(self.ads, ADS.P0)   # A0
+        self.temp_channel = AnalogIn(self.ads, ADS.P1)   # A1
+
+        # Shunt resistor used to convert current to voltage
+        self.shunt_resistor_ohms = shunt_resistor_ohms
+
+        self.start_time = None
+
+    def _format_timestamp(self, seconds):
+        return str(timedelta(seconds=seconds))[:-3]
+
+    def voltage_to_current_ma(self, voltage):
+        """
+        Convert measured voltage across the shunt resistor into current in mA.
+
+        I(A) = V / R
+        I(mA) = 1000 * V / R
+        """
+        return (voltage / self.shunt_resistor_ohms) * 1000.0
+
+    def current_to_flow_lpm(self, current_ma):
+        """
+        Water [4...20 mA]:
+        Q [l/min] = 0.938 x (I - 4 mA)
+        """
+        return 0.938 * (current_ma - 4.0)
+
+    def current_to_temperature_c(self, current_ma):
+        """
+        Temperature [4...20 mA]:
+        T [°C] = 9.375 x (I - 4 mA) - 25
+        """
+        return 9.375 * (current_ma - 4.0) - 25.0
+
+    def read_flow(self):
+        voltage = self.flow_channel.voltage
+        current_ma = self.voltage_to_current_ma(voltage)
+        flow_lpm = self.current_to_flow_lpm(current_ma)
+        return voltage, current_ma, flow_lpm
+
+    def read_temperature(self):
+        voltage = self.temp_channel.voltage
+        current_ma = self.voltage_to_current_ma(voltage)
+        temperature_c = self.current_to_temperature_c(current_ma)
+        return voltage, current_ma, temperature_c
+
+    def run(self, interval_s=0.5):
+        self.start_time = time.monotonic()
+        print("Starting ADS1115 test...")
+        print(f"ADS address: 0x{self.ads._device.device_address:02X}")
+        print(f"Shunt resistor: {self.shunt_resistor_ohms:.1f} ohm")
+        print("Flow on A0, Temperature on A1")
+        print("-" * 90)
+
+        try:
+            while True:
+                elapsed = time.monotonic() - self.start_time
+
+                flow_voltage, flow_current, flow_lpm = self.read_flow()
+                temp_voltage, temp_current, temp_c = self.read_temperature()
+
+                print(
+                    f"[{self._format_timestamp(elapsed)}] "
+                    f"FLOW: V={flow_voltage:6.3f} V | I={flow_current:6.3f} mA | Q={flow_lpm:8.3f} l/min   ||   "
+                    f"TEMP: V={temp_voltage:6.3f} V | I={temp_current:6.3f} mA | T={temp_c:8.3f} °C"
+                )
+
+                time.sleep(interval_s)
+
+        except KeyboardInterrupt:
+            print("\nTest stopped by user.")
+
+
+if __name__ == "__main__":
+    tester = ADS1115Test(
+        ads_address=0x48,
+        shunt_resistor_ohms=270.0   # Change this if your resistor is different
+    )
+    tester.run(interval_s=0.5)
