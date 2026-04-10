@@ -105,6 +105,6 @@ class ADS1115Test:
 if __name__ == "__main__":
     tester = ADS1115Test(
         ads_address=0x48,
-        shunt_resistor_ohms=250.0
+        shunt_resistor_ohms=270.0
     )
     tester.run(interval_s=0.5)
