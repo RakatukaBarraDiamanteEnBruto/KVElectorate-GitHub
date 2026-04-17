@@ -39,7 +39,7 @@ def main():
     #
     channel = 0          # Channel A
     enabled = 1
-    coupling = False         # DC
+    coupling = 0         # AC
     voltage_range = 7    # usually corresponds to ±2V in ps2000 examples
 
     status["set_channel_a"] = ps.ps2000_set_channel(
@@ -47,7 +47,7 @@ def main():
         channel,
         enabled,
         coupling,
-        voltage_range
+        ps.PS2000_VOLTAGE_RANGE['PS2000_2V']
     )
     assert_pico2000_ok(status["set_channel_a"])
 
@@ -125,6 +125,8 @@ def main():
     # 5) Allocate NumPy buffer
     # ----------------------------
     buffer_a = np.zeros(n_samples, dtype=np.int16)
+    print(f"The capture time is {(n_samples * time_interval_ns.value) / 1e3:.3f} microseconds at this timebase")
+
 
     # ----------------------------
     # 6) Run block capture
@@ -151,7 +153,7 @@ def main():
             break
   
         time.sleep(0.01)"""
-    time.sleep(10)
+    time.sleep(5)
     # ----------------------------
     # 7) Get values into NumPy buffer
     # ----------------------------
@@ -170,13 +172,13 @@ def main():
         no_of_values
     )
     assert_pico2000_ok(status["get_values"])
-
+    print(buffer_a)
     # ----------------------------
     # 8) Convert ADC to mV
     # ----------------------------
     # The wrapper examples use adc2mV after block capture.
     #
-    data_mv = adc2mV(buffer_a, voltage_range, ctypes.c_int16(32767))
+    data_V = np.array(buffer_a, dtype=np.float64) * 20 / 32767.0
 
     # ----------------------------
     # 9) Build time axis
@@ -186,18 +188,18 @@ def main():
     # ----------------------------
     # 10) Save to CSV
     # ----------------------------
-    output = np.column_stack((time_axis_ns, data_mv))
+    output = np.column_stack((time_axis_ns, buffer_a, data_V))
     output_path = r"R:\Juan Garcia Cruz\3. Technical\Osciloscope Test\Picoscope Block Captures\picoscope_2204a_block_capture.csv"
 
     np.savetxt(
         output_path,
         output,
         delimiter=",",
-        header="time_ns,voltage_mV",
+        header="time_ns,ADC counts,voltage_V",
         comments=""
     )
 
-    print(f"Capture stored: {n_samples} samples")
+    print(f"Capture stored: {n_samples}  samples")
     print(f"Sampling interval: {time_interval_ns.value} ns")
     print("Saved to picoscope_2204a_block_capture.csv")
 
