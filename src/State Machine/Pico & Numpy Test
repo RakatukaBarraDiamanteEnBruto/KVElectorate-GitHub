@@ -2,8 +2,8 @@ import time
 import ctypes
 import numpy as np
 
-from picosdk.ps2000a import ps2000a as ps
-from picosdk.functions import assert_pico_ok
+from picosdk.ps2000 import ps2000 as ps
+from picosdk.functions import adc2mV, assert_pico2000_ok
 
 
 # ============================================================
@@ -11,73 +11,96 @@ from picosdk.functions import assert_pico_ok
 # ============================================================
 CAPTURE_DURATION_S = 10
 SAMPLES_PER_BLOCK = 8000
-CHANNEL = ps.PS2000A_CHANNEL["PS2000A_CHANNEL_A"]
 TIMEBASE = 0  # fastest available timebase
 
-# Processing constants from Numpy trial.py
+# ps2000 constants
+CHANNEL = ps.PS2000_CHANNEL["PS2000_CHANNEL_A"]
+COUPLING_AC = False  # FALSE in ps2000_set_channel = AC coupling
+CHANNEL_ENABLED = 1
+OVERSAMPLE = 1
+
+# NOTE:
+# In ps2000, the smallest documented input range code is ±20 mV.
+# The programmer's guide range table goes from ±20 mV to ±20 V,
+# so there is no ±5 mV range in ps2000_set_channel. Use ±20 mV instead.
+RANGE = ps.PS2000_VOLTAGE_RANGE["PS2000_2V"]
+
+# Processing constants from your original script
 DT = 0.00000001
 MPC = 0.000012566370614
 BS = 8.00823
-VMEAN = -0.00117431640625   # kept here because it exists in your file
+VMEAN = -0.00117431640625  # kept because it exists in your file
+
+
+# ============================================================
+# HELPERS
+# ============================================================
+def pico_check(result, func_name="PicoSDK call"):
+    """
+    ps2000 functions usually return non-zero on success and 0 on failure.
+    """
+    if result == 0:
+        raise RuntimeError(f"{func_name} failed")
 
 
 # ============================================================
 # OPEN PICO
 # ============================================================
-chandle = ctypes.c_int16()
-status = {}
-
-status["openUnit"] = ps.ps2000aOpenUnit(ctypes.byref(chandle), None)
-assert_pico_ok(status["openUnit"])
+chandle = ps.ps2000_open_unit()
+if chandle <= 0:
+    raise RuntimeError(f"ps2000_open_unit failed, returned handle={chandle}")
 
 
 # ============================================================
 # CONFIGURE CHANNEL A
-# AC coupling, +-5 mV
+# AC coupling, nearest available range in ps2000 = ±20 mV
 # ============================================================
-status["setChannelA"] = ps.ps2000aSetChannel(
+status = {}
+
+status["setChannelA"] = ps.ps2000_set_channel(
     chandle,
     CHANNEL,
-    1,  # enabled
-    ps.PS2000A_COUPLING["PS2000A_AC"],
-    ps.PS2000A_RANGE["PS2000A_5MV"],
-    0.0
+    CHANNEL_ENABLED,
+    COUPLING_AC,   # FALSE = AC coupling in ps2000
+    RANGE
 )
-assert_pico_ok(status["setChannelA"])
+pico_check(status["setChannelA"], "ps2000_set_channel")
 
 
 # ============================================================
 # DISABLE TRIGGER
+# source = PS2000_NONE
 # ============================================================
-status["setTrigger"] = ps.ps2000aSetSimpleTrigger(
+status["setTrigger"] = ps.ps2000_set_trigger(
     chandle,
-    0,   # disable trigger
-    CHANNEL,
-    0,
-    0,
-    0,
-    0
+    ps.PS2000_CHANNEL["PS2000_NONE"],
+    0,   # threshold
+    0,   # direction
+    0,   # delay
+    0    # auto_trigger_ms
 )
-assert_pico_ok(status["setTrigger"])
+pico_check(status["setTrigger"], "ps2000_set_trigger")
 
 
 # ============================================================
 # CHECK TIMEBASE
 # ============================================================
-time_interval_ns = ctypes.c_float()
+time_interval = ctypes.c_int32()
+time_units = ctypes.c_int16()
 returned_max_samples = ctypes.c_int32()
 
-status["getTimebase2"] = ps.ps2000aGetTimebase2(
+status["getTimebase"] = ps.ps2000_get_timebase(
     chandle,
     TIMEBASE,
     SAMPLES_PER_BLOCK,
-    ctypes.byref(time_interval_ns),
-    ctypes.byref(returned_max_samples),
-    0
+    ctypes.byref(time_interval),
+    ctypes.byref(time_units),
+    OVERSAMPLE,
+    ctypes.byref(returned_max_samples)
 )
-assert_pico_ok(status["getTimebase2"])
+pico_check(status["getTimebase"], "ps2000_get_timebase")
 
-print(f"Sample interval: {time_interval_ns.value} ns")
+print(f"Sample interval: {time_interval.value} (units code {time_units.value})")
 print(f"Max samples available at this timebase: {returned_max_samples.value}")
 
 
@@ -93,49 +116,43 @@ captured_blocks = []
 # ============================================================
 def capture_block():
     buffer_a = (ctypes.c_int16 * SAMPLES_PER_BLOCK)()
+    overflow = ctypes.c_int16()
+    time_indisposed_ms = ctypes.c_int32()
 
-    status["setDataBuffers"] = ps.ps2000aSetDataBuffers(
+    # In ps2000 block mode, run_block requests total no_of_samples.
+    status["runBlock"] = ps.ps2000_run_block(
         chandle,
-        CHANNEL,
+        SAMPLES_PER_BLOCK,
+        TIMEBASE,
+        OVERSAMPLE,
+        ctypes.byref(time_indisposed_ms)
+    )
+    pico_check(status["runBlock"], "ps2000_run_block")
+
+    # Poll until ready
+    while True:
+        ready = ps.ps2000_ready(chandle)
+        if ready > 0:
+            break
+        if ready < 0:
+            raise RuntimeError("ps2000_ready indicates device not attached")
+        # small pause to avoid busy-spinning too hard
+        time.sleep(0.001)
+
+    sample_count = ps.ps2000_get_values(
+        chandle,
         ctypes.byref(buffer_a),
         None,
-        SAMPLES_PER_BLOCK,
-        0,
-        0
-    )
-    assert_pico_ok(status["setDataBuffers"])
-
-    status["runBlock"] = ps.ps2000aRunBlock(
-        chandle,
-        0,                   # pre-trigger samples
-        SAMPLES_PER_BLOCK,   # post-trigger samples
-        TIMEBASE,
         None,
-        0,
         None,
-        None
+        ctypes.byref(overflow),
+        SAMPLES_PER_BLOCK
     )
-    assert_pico_ok(status["runBlock"])
 
-    ready = ctypes.c_int16(0)
-    while ready.value == 0:
-        status["isReady"] = ps.ps2000aIsReady(chandle, ctypes.byref(ready))
+    if sample_count <= 0:
+        raise RuntimeError("ps2000_get_values failed or returned no samples")
 
-    sample_count = ctypes.c_int32(SAMPLES_PER_BLOCK)
-    overflow = ctypes.c_int16()
-
-    status["getValues"] = ps.ps2000aGetValues(
-        chandle,
-        0,
-        ctypes.byref(sample_count),
-        1,
-        0,
-        0,
-        ctypes.byref(overflow)
-    )
-    assert_pico_ok(status["getValues"])
-
-    return np.array(buffer_a[:sample_count.value], dtype=np.int16)
+    return np.array(buffer_a[:sample_count], dtype=np.int16)
 
 
 # ============================================================
@@ -212,7 +229,6 @@ while True:
     if now >= end_time:
         break
 
-    # detect read window
     if now >= next_read_time:
         read_timestamp = now - start_time
 
@@ -225,10 +241,8 @@ while True:
             f"shape = {block.shape}"
         )
 
-        # move to the next 1-second boundary
         next_read_time += 1.0
 
-        # if code is late, keep advancing until next window is in the future
         while next_read_time <= time.monotonic():
             next_read_time += 1.0
 
@@ -236,11 +250,11 @@ while True:
 # ============================================================
 # STOP AND CLOSE SCOPE
 # ============================================================
-status["stop"] = ps.ps2000aStop(chandle)
-assert_pico_ok(status["stop"])
+status["stop"] = ps.ps2000_stop(chandle)
+pico_check(status["stop"], "ps2000_stop")
 
-status["closeUnit"] = ps.ps2000aCloseUnit(chandle)
-assert_pico_ok(status["closeUnit"])
+status["closeUnit"] = ps.ps2000_close_unit(chandle)
+pico_check(status["closeUnit"], "ps2000_close_unit")
 
 
 # ============================================================
@@ -252,19 +266,6 @@ print("\nAcquisition finished.")
 print(f"Total captured blocks: {len(captured_blocks)}")
 print(f"Processed array shape: {processed_blocks.shape}")
 
-# Example access:
-# processed_blocks[sample_index, parameter_index, value_index]
-#
-# parameter_index:
-# 0 = raw ADC
-# 1 = shifted ADC
-# 2 = voltage
-# 3 = mean removed signal
-# 4 = integrated signal
-# 5 = divided by MPC
-# 6 = multiplied by BS
-
-# Optional checks
 if len(captured_blocks) > 0:
     print("\nExample first raw block shape:", captured_blocks[0].shape)
     print("Example first processed sample shape:", processed_blocks[0].shape)
