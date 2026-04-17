@@ -1,0 +1,217 @@
+import ctypes
+import time
+import numpy as np
+
+from picosdk.ps2000 import ps2000 as ps
+from picosdk.functions import adc2mV, assert_pico2000_ok
+
+
+def main():
+    status = {}
+
+    # ----------------------------
+    # 1) Open PicoScope 2204A
+    # ----------------------------
+    chandle = ctypes.c_int16()
+    status["open"] = ps.ps2000_open_unit()
+    chandle = status["open"]
+
+    if chandle <= 0:
+        raise RuntimeError("Could not open PicoScope 2204A")
+
+    print(f"PicoScope 2204A opened with handle: {chandle}")
+
+    # ----------------------------
+    # 2) Configure Channel A
+    # ----------------------------
+    # ps2000_set_channel(handle, channel, enabled, coupling, range)
+    #
+    # channel:
+    #   0 = Channel A
+    #   1 = Channel B
+    #
+    # coupling:
+    #   1 = DC
+    #   0 = AC
+    #
+    # range:
+    #   7 = 2V range on many ps2000 examples
+    #
+    channel = 0          # Channel A
+    enabled = 1
+    coupling = 0         # AC
+    voltage_range = 7    # usually corresponds to ±2V in ps2000 examples
+
+    status["set_channel_a"] = ps.ps2000_set_channel(
+        chandle,
+        channel,
+        enabled,
+        coupling,
+        ps.PS2000_VOLTAGE_RANGE['PS2000_2V']
+    )
+    assert_pico2000_ok(status["set_channel_a"])
+
+    # Optional: disable Channel B
+    status["set_channel_b"] = ps.ps2000_set_channel(
+        chandle,
+        1,   # Channel B
+        0,   # disabled
+        coupling,
+        voltage_range
+    )
+    assert_pico2000_ok(status["set_channel_b"])
+
+
+    print("Channel A configured: AC coupling, ±2V range")
+    # ----------------------------
+    # 3) Set trigger
+    # ----------------------------
+    # ps2000_set_trigger(handle, source, threshold, direction, delay, auto_trigger_ms)
+    #
+    # source:
+    #   0 = Channel A
+    #
+    # threshold is in ADC counts for this API
+    # direction:
+    #   0 = rising
+    #
+    trigger_source = 0
+    trigger_threshold = 0    # ADC counts, adjust as needed
+    trigger_direction = 0       # rising
+    trigger_delay = 0
+    auto_trigger_ms = 0
+
+    status["set_trigger"] = ps.ps2000_set_trigger(
+        chandle,
+        trigger_source,
+        trigger_threshold,
+        trigger_direction,
+        trigger_delay,
+        auto_trigger_ms
+    )
+    assert_pico2000_ok(status["set_trigger"])
+    print("Disabled trigger (auto-trigger off)")
+    # ----------------------------
+    # 4) Set sampling parameters
+    # ----------------------------
+    # ps2000_get_timebase(handle, timebase, no_of_samples, time_interval_ns, time_units, oversample, max_samples)
+    #
+    # Smaller timebase = faster sampling.
+    
+    timebase = 2
+    oversample = 1
+    n_samples = 8000
+
+    time_interval_ns = ctypes.c_int32()
+    time_units = ctypes.c_int32()
+    max_samples = ctypes.c_int32()
+
+
+    status["get_timebase"] = ps.ps2000_get_timebase(
+        chandle,
+        timebase,
+        n_samples,
+        ctypes.byref(time_interval_ns),
+        ctypes.byref(time_units),
+        oversample,
+        ctypes.byref(max_samples)
+    )
+    assert_pico2000_ok(status["get_timebase"])
+
+    print("timebase:", timebase)
+    print("time_interval_ns:", time_interval_ns.value)
+    print("max_samples:", max_samples.value)   
+    # ----------------------------
+    # 5) Allocate NumPy buffer
+    # ----------------------------
+    buffer_a = np.zeros(n_samples, dtype=np.int16)
+    print(f"The capture time is {(n_samples * time_interval_ns.value) / 1e3:.3f} microseconds at this timebase")
+
+
+    # ----------------------------
+    # 6) Run block capture
+    # ----------------------------
+    # ps2000_run_block(handle, no_of_samples, timebase, oversample, time_indisposed_ms)
+    #
+    time_indisposed_ms = ctypes.c_int32()
+
+    status["run_block"] = ps.ps2000_run_block(
+        chandle,
+        n_samples,
+        timebase,
+        oversample,
+        ctypes.byref(time_indisposed_ms)
+    )
+    assert_pico2000_ok(status["run_block"])
+
+    """" Wait until ready
+    while True:
+        ready = ps.ps2000_ready(chandle)
+       
+        if ready:
+            print("Block capture complete")
+            break
+  
+        time.sleep(0.01)"""
+    time.sleep(5)
+    # ----------------------------
+    # 7) Get values into NumPy buffer
+    # ----------------------------
+    # ps2000_get_values(handle, buffer_a, buffer_b, buffer_c, buffer_d, overflow, no_of_values)
+    #
+    overflow = ctypes.c_int16(0)
+    no_of_values = ctypes.c_int32(n_samples)
+
+    status["get_values"] = ps.ps2000_get_values(
+        chandle,
+        buffer_a.ctypes.data_as(ctypes.POINTER(ctypes.c_int16)),
+        None,
+        None,
+        None,
+        ctypes.byref(overflow),
+        no_of_values
+    )
+    assert_pico2000_ok(status["get_values"])
+    print(buffer_a)
+    # ----------------------------
+    # 8) Convert ADC to mV
+    # ----------------------------
+    # The wrapper examples use adc2mV after block capture.
+    #
+    data_V = np.array(buffer_a, dtype=np.float64) * 20 / 32767.0
+
+    # ----------------------------
+    # 9) Build time axis
+    # ----------------------------
+    time_axis_ns = np.arange(n_samples) * time_interval_ns.value
+
+    # ----------------------------
+    # 10) Save to CSV
+    # ----------------------------
+    output = np.column_stack((time_axis_ns, buffer_a, data_V))
+    output_path = r"R:\Juan Garcia Cruz\3. Technical\Osciloscope Test\Picoscope Block Captures\picoscope_2204a_block_capture.csv"
+
+    np.savetxt(
+        output_path,
+        output,
+        delimiter=",",
+        header="time_ns,ADC counts,voltage_V",
+        comments=""
+    )
+
+    print(f"Capture stored: {n_samples}  samples")
+    print(f"Sampling interval: {time_interval_ns.value} ns")
+    print("Saved to picoscope_2204a_block_capture.csv")
+
+    # ----------------------------
+    # 11) Stop and close
+    # ----------------------------
+    status["stop"] = ps.ps2000_stop(chandle)
+    assert_pico2000_ok(status["stop"])
+
+    status["close"] = ps.ps2000_close_unit(chandle)
+    assert_pico2000_ok(status["close"])
+
+
+if __name__ == "__main__":
+    main()
