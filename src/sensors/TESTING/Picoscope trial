@@ -19,6 +19,8 @@ def main():
     if chandle <= 0:
         raise RuntimeError("Could not open PicoScope 2204A")
 
+    print(f"PicoScope 2204A opened with handle: {chandle}")
+
     # ----------------------------
     # 2) Configure Channel A
     # ----------------------------
@@ -37,7 +39,7 @@ def main():
     #
     channel = 0          # Channel A
     enabled = 1
-    coupling = 1         # DC
+    coupling = False         # DC
     voltage_range = 7    # usually corresponds to ±2V in ps2000 examples
 
     status["set_channel_a"] = ps.ps2000_set_channel(
@@ -59,6 +61,8 @@ def main():
     )
     assert_pico2000_ok(status["set_channel_b"])
 
+
+    print("Channel A configured: AC coupling, ±2V range")
     # ----------------------------
     # 3) Set trigger
     # ----------------------------
@@ -72,10 +76,10 @@ def main():
     #   0 = rising
     #
     trigger_source = 0
-    trigger_threshold = 500     # ADC counts, adjust as needed
+    trigger_threshold = 0    # ADC counts, adjust as needed
     trigger_direction = 0       # rising
     trigger_delay = 0
-    auto_trigger_ms = 1000
+    auto_trigger_ms = 0
 
     status["set_trigger"] = ps.ps2000_set_trigger(
         chandle,
@@ -86,21 +90,22 @@ def main():
         auto_trigger_ms
     )
     assert_pico2000_ok(status["set_trigger"])
-
+    print("Disabled trigger (auto-trigger off)")
     # ----------------------------
     # 4) Set sampling parameters
     # ----------------------------
     # ps2000_get_timebase(handle, timebase, no_of_samples, time_interval_ns, time_units, oversample, max_samples)
     #
     # Smaller timebase = faster sampling.
-    #
-    timebase = 8
+    
+    timebase = 2
     oversample = 1
-    n_samples = 7500
+    n_samples = 8000
 
     time_interval_ns = ctypes.c_int32()
     time_units = ctypes.c_int32()
     max_samples = ctypes.c_int32()
+
 
     status["get_timebase"] = ps.ps2000_get_timebase(
         chandle,
@@ -113,6 +118,9 @@ def main():
     )
     assert_pico2000_ok(status["get_timebase"])
 
+    print("timebase:", timebase)
+    print("time_interval_ns:", time_interval_ns.value)
+    print("max_samples:", max_samples.value)   
     # ----------------------------
     # 5) Allocate NumPy buffer
     # ----------------------------
@@ -134,13 +142,16 @@ def main():
     )
     assert_pico2000_ok(status["run_block"])
 
-    # Wait until ready
+    """" Wait until ready
     while True:
         ready = ps.ps2000_ready(chandle)
+       
         if ready:
+            print("Block capture complete")
             break
-        time.sleep(0.01)
-
+  
+        time.sleep(0.01)"""
+    time.sleep(10)
     # ----------------------------
     # 7) Get values into NumPy buffer
     # ----------------------------
@@ -165,7 +176,7 @@ def main():
     # ----------------------------
     # The wrapper examples use adc2mV after block capture.
     #
-    data_mv = adc2mV(buffer_a, voltage_range, 32767)
+    data_mv = adc2mV(buffer_a, voltage_range, ctypes.c_int16(32767))
 
     # ----------------------------
     # 9) Build time axis
@@ -176,15 +187,17 @@ def main():
     # 10) Save to CSV
     # ----------------------------
     output = np.column_stack((time_axis_ns, data_mv))
+    output_path = r"R:\Juan Garcia Cruz\3. Technical\Osciloscope Test\Picoscope Block Captures\picoscope_2204a_block_capture.csv"
+
     np.savetxt(
-        "picoscope_2204a_block_capture.csv",
+        output_path,
         output,
         delimiter=",",
         header="time_ns,voltage_mV",
         comments=""
     )
 
-    print(f"Capture complete: {n_samples} samples")
+    print(f"Capture stored: {n_samples} samples")
     print(f"Sampling interval: {time_interval_ns.value} ns")
     print("Saved to picoscope_2204a_block_capture.csv")
 
