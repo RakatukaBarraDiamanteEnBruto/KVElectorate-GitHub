@@ -98,7 +98,7 @@ def main():
     #
     # Smaller timebase = faster sampling.
     
-    timebase = 2
+    timebase = 5
     oversample = 1
     n_samples = 8000
 
