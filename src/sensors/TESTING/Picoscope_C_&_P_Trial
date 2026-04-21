@@ -11,7 +11,7 @@ from picosdk.functions import adc2mV, assert_pico2000_ok
 # ============================================================
 # ACQUISITION SETTINGS
 # ============================================================
-CAPTURE_DURATION_S = 4
+CAPTURE_DURATION_S = 5
 TIMEBASE = 2
 OVERSAMPLE = 1
 N_SAMPLES = 8000
@@ -19,8 +19,8 @@ N_SAMPLES = 8000
 # Processing constants
 DT = 0.00000004
 MPC = 0.000001256637061436
-BS = 0.577
-
+BS = 0.545
+CP = 4.904
 
 # ============================================================
 # 1) Open PicoScope 2204A
@@ -47,7 +47,7 @@ status["set_channel_a"] = ps.ps2000_set_channel(
     channel,
     enabled,
     coupling,
-    ps.PS2000_VOLTAGE_RANGE['PS2000_2V']
+    ps.PS2000_VOLTAGE_RANGE['PS2000_5V']
 )
 assert_pico2000_ok(status["set_channel_a"])
 
@@ -164,7 +164,7 @@ def capture_block():
 # ============================================================
 # 7) Function to process captured blocks
 # ============================================================
-def process_captured_blocks(block_list, dt=DT, mpc=MPC, bs=BS):
+def process_captured_blocks(block_list, dt=DT, mpc=MPC, bs=BS, cp=CP):
     """
     Process captured blocks into 3D array:
     Shape: (n_blocks, 7, n_samples)
@@ -184,6 +184,7 @@ def process_captured_blocks(block_list, dt=DT, mpc=MPC, bs=BS):
         return np.empty((0, 5, N_SAMPLES), dtype=np.float64), np.array([]), np.array([])
 
     processed = np.zeros((ns, 5, N_SAMPLES), dtype=np.float64)
+    rms_V = np.zeros(ns, dtype=np.float64)
     rms_B = np.zeros(ns, dtype=np.float64)
     rms_H = np.zeros(ns, dtype=np.float64)
     rms_I = np.zeros(ns, dtype=np.float64)
@@ -201,26 +202,28 @@ def process_captured_blocks(block_list, dt=DT, mpc=MPC, bs=BS):
         processed[i, 0, :] = raw_block
 
         # Row 1: voltage using Picoscope_C&P_Trial conversion method
-        processed[i, 1, :] = processed[i, 0, :] * 20 / 32767.0
+        processed[i, 1, :] = processed[i, 0, :] * 50 / 32767.0
+        processed[i, 1, :] = processed[i, 1,:] - np.mean(processed[i, 1, :])  # Remove DC offset
+
 
         # Row 2: trapezoidal integration B field
         processed[i, 2, 0] = 0.0
         processed[i, 2, 1:] = np.cumsum(
-            0.5 * (processed[i, 1, :-1] + processed[i, 1, 1:]) * dt
+            0.5 * cp * ((processed[i, 1, :-1] + processed[i, 1, 1:] ) * dt)
         )
-
         # Row 3: divide by mpc to compute Hfield
         processed[i, 3, :] = processed[i, 2, :] / mpc
 
         # Row 4: multiply by BS to get Amperage 
         processed[i, 4, :] = processed[i, 3, :] * bs
 
-        # Calculate RMS for H, amperage, and B
+        # Calculate RMS for V, H, amperage, and B
+        rms_V[i] = np.sqrt(np.mean(processed[i, 1, :]**2))
         rms_B[i] = np.sqrt(np.mean(processed[i, 2, :]**2))
-        rms_B[i] = np.sqrt(np.mean(processed[i, 3, :]**2))
+        rms_H[i] = np.sqrt(np.mean(processed[i, 3, :]**2))
         rms_I[i] = np.sqrt(np.mean(processed[i, 4, :]**2))
 
-    return processed, rms_B, rms_H, rms_I
+    return processed, rms_V, rms_B, rms_H, rms_I
 
 
 # ============================================================
@@ -228,12 +231,14 @@ def process_captured_blocks(block_list, dt=DT, mpc=MPC, bs=BS):
 # ============================================================
 start_time = time.monotonic()
 end_time = start_time + CAPTURE_DURATION_S
-next_read_time = start_time + 1.0
+interval = 0.25
+next_read_time = start_time + interval
 
 print(f"\nStarting timed block acquisition for {CAPTURE_DURATION_S} seconds...")
 
 while True:
     now = time.monotonic()
+    
 
     if now >= end_time:
         break
@@ -250,14 +255,14 @@ while True:
             f"shape = {block.shape}"
         )
 
-        next_read_time += 1.0
+        next_read_time += interval
         print(f"block captured: {len(captured_blocks)}")
         while next_read_time <= time.monotonic():
-            next_read_time += 1.0
+            next_read_time += interval
 
 # Save all captured blocks to CSV if any were captured
 if captured_blocks:
-    processed_blocks, rms_B, rms_H, rms_I = process_captured_blocks(captured_blocks)
+    processed_blocks, rms_V, rms_B, rms_H, rms_I = process_captured_blocks(captured_blocks)
 
     output_dir = r"R:\Juan Garcia Cruz\3. Technical\Osciloscope Test\Picoscope Block Captures"
     csv_filename = "all_block_captures.csv"
@@ -289,16 +294,16 @@ if captured_blocks:
                     t = sample_index * time_interval_ns.value * 1e-9
                     raw = int(block[sample_index])
                     volt = processed_blocks[block_index, 1, sample_index]
-                    b_field = processed_blocks[block_index, 2, sample_index]
-                    h_field = processed_blocks[block_index, 3, sample_index]
+                    B_field = processed_blocks[block_index, 2, sample_index]
+                    H_field = processed_blocks[block_index, 3, sample_index]
                     current = processed_blocks[block_index, 4, sample_index]
                     row.extend([
                         sample_index,
                         f"{t:.12e}",
                         raw,
                         f"{volt:.12e}",
-                        f"{b_field:.12e}",
-                        f"{h_field:.12e}",
+                        f"{B_field:.12e}",
+                        f"{H_field:.12e}",
                         f"{current:.12e}",
                     ])
                 else:
@@ -325,19 +330,22 @@ print("\nDevice closed.")
 # ============================================================
 # 10) Process all captured blocks
 # ============================================================
-processed_blocks, rms_B, rms_I, rms_H = process_captured_blocks(captured_blocks)
+processed_blocks, rms_V, rms_B, rms_I, rms_H = process_captured_blocks(captured_blocks)
 
 print(f"\nAcquisition finished.")
 print(f"Total captured blocks: {len(captured_blocks)}")
 print(f"Processed array shape: {processed_blocks.shape}")
 
+"""
 if len(captured_blocks) > 0:
     print(f"\nExample - First raw block shape: {captured_blocks[0].shape}")
     print(f"Example - First processed block shape: {processed_blocks[0].shape}")
     print(f"\nFirst block, Row 0 (raw ADC), first 10 values: {processed_blocks[0, 0, :10]}")
     print(f"First block, Row 1 (voltage), first 10 values: {processed_blocks[0, 1, :10]}")
-    print(f"First block, Row 2 (H field), first 10 values: {processed_blocks[0, 2, :10]}")
-    
+    print(f"First block, Row 2 (B field), first 10 values: {processed_blocks[0, 2, :10]}")
+    print(f"First block, Row 3 (H field), first 10 values: {processed_blocks[0, 3, :10]}")
+    print(f"First block, Row 4 (current), first 10 values: {processed_blocks[0, 4, :10]}")
+
     print(f"\n{'='*60}")
     print("RMS VALUES (Root Mean Square)")
     print(f"{'='*60}")
@@ -346,14 +354,15 @@ if len(captured_blocks) > 0:
         print(f"  Block {i+1}: {rms_val:.6f}")
     
     print(f"\nOverall RMS H Field: {np.mean(rms_H):.6f} (mean across blocks)")
-    print("\nRMS Amperage (Row 3) for each block:")
+    print("\nRMS Amperage (Row 4) for each block:")
     for i, rms_val in enumerate(rms_I):
         print(f"  Block {i+1}: {rms_val:.6f}")
     
-    print("\nRMS B Field (Row 4) for each block:")
+    print("\nRMS B Field (Row 2) for each block:")
     for i, rms_val in enumerate(rms_B):
         print(f"  Block {i+1}: {rms_val:.6f}")
-    
-    print(f"\nOverall RMS Amperage: {np.mean(rms_I):.6f} (mean across blocks)")
-    print(f"Overall RMS B Field: {np.mean(rms_B):.6f} (mean across blocks)")
-    print(f"\nOverall RMS H Field: {np.mean(rms_H):.6f} (mean across blocks)")
+"""    
+print(f"\nOverall RMS Voltage: {np.mean(rms_V):.6f} (mean across blocks)")
+print(f"\nOverall RMS Amperage: {np.mean(rms_I):.6f} (mean across blocks)")
+print(f"Overall RMS B Field: {np.mean(rms_B):.6f} (mean across blocks)")
+print(f"\nOverall RMS H Field: {np.mean(rms_H):.6f} (mean across blocks)")
