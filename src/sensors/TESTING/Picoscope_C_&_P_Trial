@@ -12,7 +12,7 @@ from picosdk.functions import adc2mV, assert_pico2000_ok
 # ACQUISITION SETTINGS
 # ============================================================
 CAPTURE_DURATION_S = 5
-TIMEBASE = 2
+TIMEBASE = 1
 OVERSAMPLE = 1
 N_SAMPLES = 8000
 
@@ -203,7 +203,7 @@ def process_captured_blocks(block_list, dt=DT, mpc=MPC, bs=BS, cp=CP):
 
         # Row 1: voltage using Picoscope_C&P_Trial conversion method
         processed[i, 1, :] = processed[i, 0, :] * 50 / 32767.0
-        processed[i, 1, :] = processed[i, 1,:] - np.mean(processed[i, 1, :])  # Remove DC offset
+        processed[i, 1, :] = processed[i, 1,:] - np.mean(processed[i, 1, :])  # Remove small offset
 
 
         # Row 2: trapezoidal integration B field
