@@ -184,9 +184,9 @@ def process_captured_blocks(block_list, dt=DT, mpc=MPC, bs=BS):
         return np.empty((0, 5, N_SAMPLES), dtype=np.float64), np.array([]), np.array([])
 
     processed = np.zeros((ns, 5, N_SAMPLES), dtype=np.float64)
-    rms_h = np.zeros(ns, dtype=np.float64)
-    rms_amperage = np.zeros(ns, dtype=np.float64)
-    rms_b = np.zeros(ns, dtype=np.float64)
+    rms_B = np.zeros(ns, dtype=np.float64)
+    rms_H = np.zeros(ns, dtype=np.float64)
+    rms_I = np.zeros(ns, dtype=np.float64)
 
     for i in range(ns):
         raw_block = np.asarray(block_list[i], dtype=np.float64)
@@ -217,10 +217,10 @@ def process_captured_blocks(block_list, dt=DT, mpc=MPC, bs=BS):
 
         # Calculate RMS for H, amperage, and B
         rms_B[i] = np.sqrt(np.mean(processed[i, 2, :]**2))
-        rms_H[i] = np.sqrt(np.mean(processed[i, 3, :]**2))
+        rms_B[i] = np.sqrt(np.mean(processed[i, 3, :]**2))
         rms_I[i] = np.sqrt(np.mean(processed[i, 4, :]**2))
 
-    return processed, rms_h, rms_amperage, rms_b
+    return processed, rms_B, rms_H, rms_I
 
 
 # ============================================================
@@ -257,6 +257,8 @@ while True:
 
 # Save all captured blocks to CSV if any were captured
 if captured_blocks:
+    processed_blocks, rms_B, rms_H, rms_I = process_captured_blocks(captured_blocks)
+
     output_dir = r"R:\Juan Garcia Cruz\3. Technical\Osciloscope Test\Picoscope Block Captures"
     csv_filename = "all_block_captures.csv"
     csv_path = os.path.join(output_dir, csv_filename)
@@ -274,19 +276,33 @@ if captured_blocks:
                 f"block{block_index}_time_s",
                 f"block{block_index}_raw_adc",
                 f"block{block_index}_voltage_V",
+                f"block{block_index}_b_field",
+                f"block{block_index}_h_field",
+                f"block{block_index}_current_A",
             ])
         writer.writerow(header)
 
         for sample_index in range(max_samples):
             row = []
-            for block in captured_blocks:
+            for block_index, block in enumerate(captured_blocks):
                 if sample_index < block.shape[0]:
                     t = sample_index * time_interval_ns.value * 1e-9
                     raw = int(block[sample_index])
-                    volt = block[sample_index].astype(np.float64) * 20.0 / 32767.0
-                    row.extend([sample_index, f"{t:.12e}", raw, f"{volt:.12e}"])
+                    volt = processed_blocks[block_index, 1, sample_index]
+                    b_field = processed_blocks[block_index, 2, sample_index]
+                    h_field = processed_blocks[block_index, 3, sample_index]
+                    current = processed_blocks[block_index, 4, sample_index]
+                    row.extend([
+                        sample_index,
+                        f"{t:.12e}",
+                        raw,
+                        f"{volt:.12e}",
+                        f"{b_field:.12e}",
+                        f"{h_field:.12e}",
+                        f"{current:.12e}",
+                    ])
                 else:
-                    row.extend(["", "", "", ""])
+                    row.extend(["", "", "", "", "", "", ""])
             writer.writerow(row)
 
     print(f"Saved all {len(captured_blocks)} blocks to {csv_path}")
@@ -309,7 +325,7 @@ print("\nDevice closed.")
 # ============================================================
 # 10) Process all captured blocks
 # ============================================================
-processed_blocks, rms_h, rms_amperage, rms_b = process_captured_blocks(captured_blocks)
+processed_blocks, rms_B, rms_I, rms_H = process_captured_blocks(captured_blocks)
 
 print(f"\nAcquisition finished.")
 print(f"Total captured blocks: {len(captured_blocks)}")
@@ -326,18 +342,18 @@ if len(captured_blocks) > 0:
     print("RMS VALUES (Root Mean Square)")
     print(f"{'='*60}")
     print("\nRMS H Field (Row 2) for each block:")
-    for i, rms_val in enumerate(rms_h):
+    for i, rms_val in enumerate(rms_H):
         print(f"  Block {i+1}: {rms_val:.6f}")
     
-    print(f"\nOverall RMS H Field: {np.mean(rms_h):.6f} (mean across blocks)")
+    print(f"\nOverall RMS H Field: {np.mean(rms_H):.6f} (mean across blocks)")
     print("\nRMS Amperage (Row 3) for each block:")
-    for i, rms_val in enumerate(rms_amperage):
+    for i, rms_val in enumerate(rms_I):
         print(f"  Block {i+1}: {rms_val:.6f}")
     
     print("\nRMS B Field (Row 4) for each block:")
-    for i, rms_val in enumerate(rms_b):
+    for i, rms_val in enumerate(rms_B):
         print(f"  Block {i+1}: {rms_val:.6f}")
     
-    print(f"\nOverall RMS Amperage: {np.mean(rms_amperage):.6f} (mean across blocks)")
-    print(f"Overall RMS B Field: {np.mean(rms_b):.6f} (mean across blocks)")
-    print(f"\nOverall RMS H Field: {np.mean(rms_h):.6f} (mean across blocks)")
+    print(f"\nOverall RMS Amperage: {np.mean(rms_I):.6f} (mean across blocks)")
+    print(f"Overall RMS B Field: {np.mean(rms_B):.6f} (mean across blocks)")
+    print(f"\nOverall RMS H Field: {np.mean(rms_H):.6f} (mean across blocks)")
