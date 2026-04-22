@@ -3,6 +3,9 @@ import csv
 import os
 import time
 import numpy as np
+from scipy.signal import detrend
+from scipy.signal import butter, filtfilt
+
 
 from picosdk.ps2000 import ps2000 as ps
 from picosdk.functions import adc2mV, assert_pico2000_ok
@@ -11,16 +14,16 @@ from picosdk.functions import adc2mV, assert_pico2000_ok
 # ============================================================
 # ACQUISITION SETTINGS
 # ============================================================
-CAPTURE_DURATION_S = 5
-TIMEBASE = 2
+CAPTURE_DURATION_S = 10
+TIMEBASE = 1
 OVERSAMPLE = 1
 N_SAMPLES = 8000
 
 # Processing constants
-DT = 0.00000004
+DT = 0.00000002
 MPC = 0.000001256637061436
 BS = 0.545
-CP = 4.904
+CP = -4.904 
 
 # ============================================================
 # 1) Open PicoScope 2204A
@@ -47,7 +50,7 @@ status["set_channel_a"] = ps.ps2000_set_channel(
     channel,
     enabled,
     coupling,
-    ps.PS2000_VOLTAGE_RANGE['PS2000_5V']
+    ps.PS2000_VOLTAGE_RANGE['PS2000_1V']
 )
 assert_pico2000_ok(status["set_channel_a"])
 
@@ -61,7 +64,7 @@ status["set_channel_b"] = ps.ps2000_set_channel(
 )
 assert_pico2000_ok(status["set_channel_b"])
 
-print("Channel A configured: AC coupling, ±2V range")
+print("Channel A configured: AC coupling, ±10V range")
 
 
 # ============================================================
@@ -202,8 +205,11 @@ def process_captured_blocks(block_list, dt=DT, mpc=MPC, bs=BS, cp=CP):
         processed[i, 0, :] = raw_block
 
         # Row 1: voltage using Picoscope_C&P_Trial conversion method
-        processed[i, 1, :] = processed[i, 0, :] * 50 / 32767.0
-        processed[i, 1, :] = processed[i, 1,:] - np.mean(processed[i, 1, :])  # Remove DC offset
+        processed[i, 1, :] = processed[i, 0, :] * 10 / 32767.0 # ADC * V range * 10x attenuation factor / ADC Range ( 32 Bit logic, pretty sure maybe 64)
+        fs = 1 / dt
+        cutoff = 150000  # 10 kHz (example)
+        b, a = butter(2, cutoff / (fs/2), btype='highpass')
+        processed[i, 1, :] = filtfilt(b, a, processed[i, 1, :])
 
 
         # Row 2: trapezoidal integration B field
@@ -231,7 +237,7 @@ def process_captured_blocks(block_list, dt=DT, mpc=MPC, bs=BS, cp=CP):
 # ============================================================
 start_time = time.monotonic()
 end_time = start_time + CAPTURE_DURATION_S
-interval = 0.25
+interval = 2
 next_read_time = start_time + interval
 
 print(f"\nStarting timed block acquisition for {CAPTURE_DURATION_S} seconds...")
@@ -265,7 +271,7 @@ if captured_blocks:
     processed_blocks, rms_V, rms_B, rms_H, rms_I = process_captured_blocks(captured_blocks)
 
     output_dir = r"R:\Juan Garcia Cruz\3. Technical\Osciloscope Test\Picoscope Block Captures"
-    csv_filename = "all_block_captures.csv"
+    csv_filename = "Al_block_captures.csv"
     csv_path = os.path.join(output_dir, csv_filename)
 
     os.makedirs(output_dir, exist_ok=True)
@@ -336,7 +342,7 @@ print(f"\nAcquisition finished.")
 print(f"Total captured blocks: {len(captured_blocks)}")
 print(f"Processed array shape: {processed_blocks.shape}")
 
-"""
+
 if len(captured_blocks) > 0:
     print(f"\nExample - First raw block shape: {captured_blocks[0].shape}")
     print(f"Example - First processed block shape: {processed_blocks[0].shape}")
@@ -360,9 +366,9 @@ if len(captured_blocks) > 0:
     
     print("\nRMS B Field (Row 2) for each block:")
     for i, rms_val in enumerate(rms_B):
-        print(f"  Block {i+1}: {rms_val:.6f}")
-"""    
-print(f"\nOverall RMS Voltage: {np.mean(rms_V):.6f} (mean across blocks)")
-print(f"\nOverall RMS Amperage: {np.mean(rms_I):.6f} (mean across blocks)")
-print(f"Overall RMS B Field: {np.mean(rms_B):.6f} (mean across blocks)")
-print(f"\nOverall RMS H Field: {np.mean(rms_H):.6f} (mean across blocks)")
+        print(f"  Block {i+1}: {rms_val:.6e}")
+
+print(f"Overall RMS Voltage: {np.mean(rms_V):.6f} (mean across blocks)")
+print(f"Overall RMS Amperage: {np.mean(rms_I):.6f} (mean across blocks)")
+print(f"Overall RMS B Field: {np.mean(rms_B):.6e} (mean across blocks)")
+print(f"Overall RMS H Field: {np.mean(rms_H):.6f} (mean across blocks)")
