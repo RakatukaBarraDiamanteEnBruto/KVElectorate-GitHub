@@ -14,7 +14,7 @@ from picosdk.functions import adc2mV, assert_pico2000_ok
 # ============================================================
 # ACQUISITION SETTINGS
 # ============================================================
-CAPTURE_DURATION_S = 10
+CAPTURE_DURATION_S = 30
 TIMEBASE = 1
 OVERSAMPLE = 1
 N_SAMPLES = 8000
@@ -237,7 +237,7 @@ def process_captured_blocks(block_list, dt=DT, mpc=MPC, bs=BS, cp=CP):
 # ============================================================
 start_time = time.monotonic()
 end_time = start_time + CAPTURE_DURATION_S
-interval = 2
+interval = 0.25
 next_read_time = start_time + interval
 
 print(f"\nStarting timed block acquisition for {CAPTURE_DURATION_S} seconds...")
