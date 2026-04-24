@@ -50,7 +50,7 @@ status["set_channel_a"] = ps.ps2000_set_channel(
     channel,
     enabled,
     coupling,
-    ps.PS2000_VOLTAGE_RANGE['PS2000_1V']
+    ps.PS2000_VOLTAGE_RANGE['PS2000_5V']
 )
 assert_pico2000_ok(status["set_channel_a"])
 
@@ -205,7 +205,7 @@ def process_captured_blocks(block_list, dt=DT, mpc=MPC, bs=BS, cp=CP):
         processed[i, 0, :] = raw_block
 
         # Row 1: voltage using Picoscope_C&P_Trial conversion method
-        processed[i, 1, :] = processed[i, 0, :] * 10 / 32767.0 # ADC * V range * 10x attenuation factor / ADC Range ( 32 Bit logic, pretty sure maybe 64)
+        processed[i, 1, :] = processed[i, 0, :] * 50 / 32767.0 # ADC * V range * 10x attenuation factor / ADC Range ( 32 Bit logic, pretty sure maybe 64)
         fs = 1 / dt
         cutoff = 150000  # 10 kHz (example)
         b, a = butter(2, cutoff / (fs/2), btype='highpass')
