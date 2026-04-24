@@ -1,0 +1,374 @@
+import ctypes
+import csv
+import os
+import time
+import numpy as np
+from scipy.signal import detrend
+from scipy.signal import butter, filtfilt
+
+
+from picosdk.ps2000 import ps2000 as ps
+from picosdk.functions import adc2mV, assert_pico2000_ok
+
+
+# ============================================================
+# ACQUISITION SETTINGS
+# ============================================================
+CAPTURE_DURATION_S = 30
+TIMEBASE = 1
+OVERSAMPLE = 1
+N_SAMPLES = 8000
+
+# Processing constants
+DT = 0.00000002
+MPC = 0.000001256637061436
+BS = 0.545
+CP = -4.904 
+
+# ============================================================
+# 1) Open PicoScope 2204A
+# ============================================================
+chandle = ps.ps2000_open_unit()
+if chandle <= 0:
+    raise RuntimeError(f"ps2000_open_unit failed, returned handle={chandle}")
+
+print(f"PicoScope 2204A opened with handle: {chandle}")
+
+status = {}
+
+
+# ============================================================
+# 2) Configure Channel A - AC coupling, 2V range
+# ============================================================
+channel = 0          # Channel A
+enabled = 1
+coupling = 0         # AC
+voltage_range = 7    # usually corresponds to ±2V in ps2000 examples
+
+status["set_channel_a"] = ps.ps2000_set_channel(
+    chandle,
+    channel,
+    enabled,
+    coupling,
+    ps.PS2000_VOLTAGE_RANGE['PS2000_5V']
+)
+assert_pico2000_ok(status["set_channel_a"])
+
+# Optional: disable Channel B
+status["set_channel_b"] = ps.ps2000_set_channel(
+    chandle,
+    1,   # Channel B
+    0,   # disabled
+    coupling,
+    voltage_range
+)
+assert_pico2000_ok(status["set_channel_b"])
+
+print("Channel A configured: AC coupling, ±10V range")
+
+
+# ============================================================
+# 3) Set trigger (disabled)
+# ============================================================
+trigger_source = 0
+trigger_threshold = 0    # ADC counts, adjust as needed
+trigger_direction = 0       # rising
+trigger_delay = 0
+auto_trigger_ms = 0
+
+status["set_trigger"] = ps.ps2000_set_trigger(
+    chandle,
+    trigger_source,
+    trigger_threshold,
+    trigger_direction,
+    trigger_delay,
+    auto_trigger_ms
+)
+assert_pico2000_ok(status["set_trigger"])
+print("Disabled trigger (auto-trigger off)")
+
+
+# ============================================================
+# 4) Set sampling parameters
+# ============================================================
+time_interval_ns = ctypes.c_int32()
+time_units = ctypes.c_int32()
+max_samples = ctypes.c_int32()
+
+status["get_timebase"] = ps.ps2000_get_timebase(
+    chandle,
+    TIMEBASE,
+    N_SAMPLES,
+    ctypes.byref(time_interval_ns),
+    ctypes.byref(time_units),
+    OVERSAMPLE,
+    ctypes.byref(max_samples)
+)
+assert_pico2000_ok(status["get_timebase"])
+
+print("timebase:", TIMEBASE)
+print("time_interval_ns:", time_interval_ns.value)
+print("max_samples:", max_samples.value)
+print(f"The capture time is {(N_SAMPLES * time_interval_ns.value) / 1e3:.3f} microseconds at this timebase")
+
+
+# ============================================================
+# 5) Capture storage - list of raw blocks
+# ============================================================
+captured_blocks = []
+
+
+# ============================================================
+# 6) Function to capture one block
+# ============================================================
+def capture_block():
+    buffer_a = (ctypes.c_int16 * N_SAMPLES)()
+    overflow = ctypes.c_int16()
+    time_indisposed_ms = ctypes.c_int32()
+
+    # Run block capture
+    status["runBlock"] = ps.ps2000_run_block(
+        chandle,
+        N_SAMPLES,
+        TIMEBASE,
+        OVERSAMPLE,
+        ctypes.byref(time_indisposed_ms)
+    )
+    assert_pico2000_ok(status["runBlock"])
+
+    # Poll until ready
+    """"
+    while True:
+        ready = ps.ps2000_ready(chandle)
+        if ready > 0:
+            break
+        if ready < 0:
+            raise RuntimeError("ps2000_ready indicates device not attached")
+        time.sleep(0.001)
+    """
+    time.sleep(0.2)  # Simple delay to allow capture to complete (adjust as needed)
+    # Get values
+    sample_count = ps.ps2000_get_values(
+        chandle,
+        ctypes.byref(buffer_a),
+        None,
+        None,
+        None,
+        ctypes.byref(overflow),
+        N_SAMPLES
+    )
+
+    if sample_count <= 0:
+        raise RuntimeError("ps2000_get_values failed or returned no samples")
+
+    return np.array(buffer_a[:sample_count], dtype=np.int16)
+
+
+# ============================================================
+# 7) Function to process captured blocks
+# ============================================================
+def process_captured_blocks(block_list, dt=DT, mpc=MPC, bs=BS, cp=CP):
+    """
+    Process captured blocks into 3D array:
+    Shape: (n_blocks, 7, n_samples)
+    
+    Row indices:
+      0 = raw ADC
+      1 = voltage (from ADC using Picoscope conversion: * 20 / 32767)
+      2 = trapezoidal integration / H proxy
+      3 = divided by MPC (amperage)
+      4 = multiplied by BS (B field)
+    
+    Also returns RMS values for amperage and B field.
+    """
+    ns = len(block_list)
+
+    if ns == 0:
+        return np.empty((0, 5, N_SAMPLES), dtype=np.float64), np.array([]), np.array([])
+
+    processed = np.zeros((ns, 5, N_SAMPLES), dtype=np.float64)
+    rms_V = np.zeros(ns, dtype=np.float64)
+    rms_B = np.zeros(ns, dtype=np.float64)
+    rms_H = np.zeros(ns, dtype=np.float64)
+    rms_I = np.zeros(ns, dtype=np.float64)
+
+    for i in range(ns):
+        raw_block = np.asarray(block_list[i], dtype=np.float64)
+
+        if raw_block.shape[0] != N_SAMPLES:
+            raise ValueError(
+                f"Block {i} has length {raw_block.shape[0]}, "
+                f"expected {N_SAMPLES}"
+            )
+
+        # Row 0: raw ADC
+        processed[i, 0, :] = raw_block
+
+        # Row 1: voltage using Picoscope_C&P_Trial conversion method
+        processed[i, 1, :] = processed[i, 0, :] * 50 / 32767.0 # ADC * V range * 10x attenuation factor / ADC Range ( 32 Bit logic, pretty sure maybe 64)
+        fs = 1 / dt
+        cutoff = 150000  # 10 kHz (example)
+        b, a = butter(2, cutoff / (fs/2), btype='highpass')
+        processed[i, 1, :] = filtfilt(b, a, processed[i, 1, :])
+
+
+        # Row 2: trapezoidal integration B field
+        processed[i, 2, 0] = 0.0
+        processed[i, 2, 1:] = np.cumsum(
+            0.5 * cp * ((processed[i, 1, :-1] + processed[i, 1, 1:] ) * dt)
+        )
+        # Row 3: divide by mpc to compute Hfield
+        processed[i, 3, :] = processed[i, 2, :] / mpc
+
+        # Row 4: multiply by BS to get Amperage 
+        processed[i, 4, :] = processed[i, 3, :] * bs
+
+        # Calculate RMS for V, H, amperage, and B
+        rms_V[i] = np.sqrt(np.mean(processed[i, 1, :]**2))
+        rms_B[i] = np.sqrt(np.mean(processed[i, 2, :]**2))
+        rms_H[i] = np.sqrt(np.mean(processed[i, 3, :]**2))
+        rms_I[i] = np.sqrt(np.mean(processed[i, 4, :]**2))
+
+    return processed, rms_V, rms_B, rms_H, rms_I
+
+
+# ============================================================
+# 8) Timed acquisition loop
+# ============================================================
+start_time = time.monotonic()
+end_time = start_time + CAPTURE_DURATION_S
+interval = 0.25
+next_read_time = start_time + interval
+
+print(f"\nStarting timed block acquisition for {CAPTURE_DURATION_S} seconds...")
+
+while True:
+    now = time.monotonic()
+    
+
+    if now >= end_time:
+        break
+
+    if now >= next_read_time:
+        read_timestamp = now - start_time
+
+        block = capture_block()
+        captured_blocks.append(block)
+
+        print(
+            f"Read at t = {read_timestamp:.3f} s | "
+            f"Captured block {len(captured_blocks)} | "
+            f"shape = {block.shape}"
+        )
+
+        next_read_time += interval
+        print(f"block captured: {len(captured_blocks)}")
+        while next_read_time <= time.monotonic():
+            next_read_time += interval
+
+# Save all captured blocks to CSV if any were captured
+if captured_blocks:
+    processed_blocks, rms_V, rms_B, rms_H, rms_I = process_captured_blocks(captured_blocks)
+
+    output_dir = "/home/kve/Picoscope Results"
+    csv_filename = "Al_block_captures.csv"
+    csv_path = os.path.join(output_dir, csv_filename)
+
+    os.makedirs(output_dir, exist_ok=True)
+    max_samples = max(block.shape[0] for block in captured_blocks)
+
+    with open(csv_path, mode="w", newline="") as csv_file:
+        writer = csv.writer(csv_file)
+
+        header = []
+        for block_index in range(1, len(captured_blocks) + 1):
+            header.extend([
+                f"block{block_index}_sample_index",
+                f"block{block_index}_time_s",
+                f"block{block_index}_raw_adc",
+                f"block{block_index}_voltage_V",
+                f"block{block_index}_b_field",
+                f"block{block_index}_h_field",
+                f"block{block_index}_current_A",
+            ])
+        writer.writerow(header)
+
+        for sample_index in range(max_samples):
+            row = []
+            for block_index, block in enumerate(captured_blocks):
+                if sample_index < block.shape[0]:
+                    t = sample_index * time_interval_ns.value * 1e-9
+                    raw = int(block[sample_index])
+                    volt = processed_blocks[block_index, 1, sample_index]
+                    B_field = processed_blocks[block_index, 2, sample_index]
+                    H_field = processed_blocks[block_index, 3, sample_index]
+                    current = processed_blocks[block_index, 4, sample_index]
+                    row.extend([
+                        sample_index,
+                        f"{t:.12e}",
+                        raw,
+                        f"{volt:.12e}",
+                        f"{B_field:.12e}",
+                        f"{H_field:.12e}",
+                        f"{current:.12e}",
+                    ])
+                else:
+                    row.extend(["", "", "", "", "", "", ""])
+            writer.writerow(row)
+
+    print(f"Saved all {len(captured_blocks)} blocks to {csv_path}")
+else:
+    print("No blocks captured; nothing saved to CSV.")
+
+
+# ============================================================
+# 9) Stop and close device
+# ============================================================
+status["stop"] = ps.ps2000_stop(chandle)
+assert_pico2000_ok(status["stop"])
+
+status["close"] = ps.ps2000_close_unit(chandle)
+assert_pico2000_ok(status["close"])
+
+print("\nDevice closed.")
+
+
+# ============================================================
+# 10) Process all captured blocks
+# ============================================================
+processed_blocks, rms_V, rms_B, rms_I, rms_H = process_captured_blocks(captured_blocks)
+
+print(f"\nAcquisition finished.")
+print(f"Total captured blocks: {len(captured_blocks)}")
+print(f"Processed array shape: {processed_blocks.shape}")
+
+
+if len(captured_blocks) > 0:
+    print(f"\nExample - First raw block shape: {captured_blocks[0].shape}")
+    print(f"Example - First processed block shape: {processed_blocks[0].shape}")
+    print(f"\nFirst block, Row 0 (raw ADC), first 10 values: {processed_blocks[0, 0, :10]}")
+    print(f"First block, Row 1 (voltage), first 10 values: {processed_blocks[0, 1, :10]}")
+    print(f"First block, Row 2 (B field), first 10 values: {processed_blocks[0, 2, :10]}")
+    print(f"First block, Row 3 (H field), first 10 values: {processed_blocks[0, 3, :10]}")
+    print(f"First block, Row 4 (current), first 10 values: {processed_blocks[0, 4, :10]}")
+
+    print(f"\n{'='*60}")
+    print("RMS VALUES (Root Mean Square)")
+    print(f"{'='*60}")
+    print("\nRMS H Field (Row 2) for each block:")
+    for i, rms_val in enumerate(rms_H):
+        print(f"  Block {i+1}: {rms_val:.6f}")
+    
+    print(f"\nOverall RMS H Field: {np.mean(rms_H):.6f} (mean across blocks)")
+    print("\nRMS Amperage (Row 4) for each block:")
+    for i, rms_val in enumerate(rms_I):
+        print(f"  Block {i+1}: {rms_val:.6f}")
+    
+    print("\nRMS B Field (Row 2) for each block:")
+    for i, rms_val in enumerate(rms_B):
+        print(f"  Block {i+1}: {rms_val:.6e}")
+
+print(f"Overall RMS Voltage: {np.mean(rms_V):.6f} (mean across blocks)")
+print(f"Overall RMS Amperage: {np.mean(rms_I):.6f} (mean across blocks)")
+print(f"Overall RMS B Field: {np.mean(rms_B):.6e} (mean across blocks)")
+print(f"Overall RMS H Field: {np.mean(rms_H):.6f} (mean across blocks)")
