@@ -15,16 +15,30 @@ from picosdk.functions import adc2mV, assert_pico2000_ok
 # ============================================================
 # ACQUISITION SETTINGS
 # ============================================================
+
+#Picoscope acquisition settings
 CAPTURE_DURATION_S = 30
 TIMEBASE = 1
 OVERSAMPLE = 1
 N_SAMPLES = 8000
 
-# Processing constants
-DT = 0.00000002
-MPC = 0.000001256637061436
-BS = 0.545
-CP = -4.904 
+# Picoscope Processing constants 
+
+DT = 0.00000002 # the time interval between samples
+
+#H to I conversion Constant
+
+STCD = 0.023 #  Sensor to coil distance in meters!!
+SINPHI = 1.4142135623731 # 2 times the sine of 45 degrees
+BS = SINPHI/(STCD*4*3.1416) #  Coefficient to convert from H to I directly
+
+# B to H conversion constant
+
+MPC = 0.000001256637061436 # Magnetic Permeability of free space, used to convert from B field to H field
+
+# V to B conversion constants
+
+CP = -4.904 # Coefficient for trapezoidal integration, I do not remember how I calculated it.
 
 # ============================================================
 # 1) Open PicoScope 2204A
