@@ -44,7 +44,7 @@ def main():
                     print("[EVENT] GPIO 17 is LOW (no voltage)")
                     output_pin.off()
                     print("[OUTPUT] GPIO 24 turned OFF")
-                
+            print("loop Passed")    
             previous_state = current_state    
             
             time.sleep(0.1)  # Small delay to avoid CPU spinning
