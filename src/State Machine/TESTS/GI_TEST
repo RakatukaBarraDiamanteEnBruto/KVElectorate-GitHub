@@ -1,0 +1,67 @@
+#!/usr/bin/env python3
+"""
+GPIO Input to Output Script using gpiozero
+When GPIO 17 receives an input voltage, GPIO 24 outputs a voltage
+"""
+
+from gpiozero import InputDevice, DigitalOutputDevice
+import time
+
+# Initialize GPIO pins
+print("[INIT] Initializing GPIO pins...")
+input_pin = InputDevice(17)              # GPIO 17 as input
+output_pin = DigitalOutputDevice(24)     # GPIO 24 as digital output device
+print("[INIT] GPIO 17 (Input) initialized")
+print("[INIT] GPIO 24 (Digital Output) initialized")
+
+# Initialize state tracking
+previous_state = None
+print("[INIT] Ready to monitor GPIO input")
+print("[INIT] Press Ctrl+C to exit\n")
+
+def main():
+    """Main function to monitor input and control output"""
+    global previous_state
+    
+    try:
+        print("[MAIN] GPIO Input/Output Control started")
+        print("[MAIN] Monitoring GPIO 17 for input voltage...")
+        print("[MAIN] Output will be sent to GPIO 24\n")
+        
+        while True:
+            # Check if GPIO 17 is receiving input (HIGH)
+            current_state = input_pin.is_pressed
+            
+            # Only print when state changes to reduce spam
+            if current_state != previous_state:
+                if current_state:
+                    # Turn on GPIO 24 when GPIO 17 is HIGH
+                    print("[EVENT] GPIO 17 is HIGH (voltage detected)")
+                    output_pin.on()
+                    print("[OUTPUT] GPIO 24 turned ON")
+                else:
+                    # Turn off GPIO 24 when GPIO 17 is LOW
+                    print("[EVENT] GPIO 17 is LOW (no voltage)")
+                    output_pin.off()
+                    print("[OUTPUT] GPIO 24 turned OFF")
+                
+                previous_state = current_state
+            
+            time.sleep(0.1)  # Small delay to avoid CPU spinning
+            
+    except KeyboardInterrupt:
+        print("\n[SHUTDOWN] Keyboard interrupt detected")
+        cleanup()
+
+def cleanup():
+    """Cleanup GPIO pins on exit"""
+    print("[CLEANUP] Turning off GPIO 24...")
+    output_pin.off()
+    print("[CLEANUP] Closing GPIO 17...")
+    input_pin.close()
+    print("[CLEANUP] Closing GPIO 24...")
+    output_pin.close()
+    print("[CLEANUP] GPIO cleanup complete")
+
+if __name__ == "__main__":
+    main()
