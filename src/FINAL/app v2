@@ -738,7 +738,7 @@ class TemperatureController:
         self.heater_out     = DigitalOutputDevice(heater_pin)
         self.heater_fan_out = DigitalOutputDevice(heater_fan_pin)
         self.desired_min    = 10.0
-        self.desired_max    = 11.0
+        self.desired_max    = 50.0
         self.hysteresis     = 1.0
  
     def set_temperature_range(self, min_temp, max_temp, hysteresis=1.0):
