@@ -1069,7 +1069,7 @@ class StateMachine:
  
         # SD writer and temperature controller
         sd_writer = SDWriter()
-        logtemp   = TemperatureController(logger, fan_pin=17, heater_pin=27, heater_fan_pin=22)
+        logtemp   = TemperatureController(logger, fan_pin=16, heater_pin=20, heater_fan_pin=21)
  
         self.current_state = State.IDLE
  
