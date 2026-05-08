@@ -524,7 +524,7 @@ class PicoscopeController:
             self.oversample, ctypes.byref(time_indisposed_ms)
         )
         assert_pico2000_ok(self.status["runBlock"])
- 
+        """"
         # [PICO] Reinstated ps2000_ready() polling with 1 s timeout
         deadline = time.monotonic() + 1.0
         while True:
@@ -536,7 +536,8 @@ class PicoscopeController:
             if time.monotonic() > deadline:
                 raise RuntimeError("ps2000_ready: timed out after 1 s")
             time.sleep(0.001)
- 
+        """
+        time.sleep(0.1)  # [PICO] Temporary fixed delay for capture stability — replace with ps2000_ready() polling
         sample_count = ps.ps2000_get_values(
             self.chandle,
             ctypes.byref(buffer_a),
