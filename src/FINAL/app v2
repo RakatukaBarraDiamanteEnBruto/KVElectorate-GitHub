@@ -104,20 +104,20 @@ PICO_BLOCK_PLOT         = 63     # which block to store in CSV section 3
 GPIO.setmode(GPIO.BCM)
  
 # Switch pins
-SWITCH_PIN_1 = 19
-SWITCH_PIN_2 = 26
+SWITCH_PIN_1 = 22
+SWITCH_PIN_2 = 27
 switch1 = Button(SWITCH_PIN_1, pull_up=False)
 switch2 = Button(SWITCH_PIN_2, pull_up=False)
  
 # Tower LEDs
-LED1 = LED(25)   # PRECHECK
-LED2 = LED(16)   # RUNNING STATIC
-LED3 = LED(20)   # RUNNING DYNAMIC
-LED4 = LED(21)   # ERROR
+LED1 = LED(6)   # PRECHECK
+LED2 = LED(13)   # RUNNING STATIC
+LED3 = LED(19)   # RUNNING DYNAMIC
+LED4 = LED(26)   # ERROR
  
 # Button + button LED
-button = Button(5)
-bLED   = LED(13)
+button = Button(4)
+bLED   = LED(17)
  
  
 # =============================================================================
